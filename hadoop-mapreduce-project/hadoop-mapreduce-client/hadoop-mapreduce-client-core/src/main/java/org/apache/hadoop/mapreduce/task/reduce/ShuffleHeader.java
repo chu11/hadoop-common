@@ -41,10 +41,17 @@ public class ShuffleHeader implements Writable {
    */
   private static final int MAX_ID_LENGTH = 1000;
 
+  /**
+   * The longest possible filename length for mapOutputFilename
+   */
+  /* XXX achu: Should get value from limits.h or Java equivalent */
+  private static final int MAX_FILENAME_LENGTH = 4096;
+
   String mapId;
   long uncompressedLength;
   long compressedLength;
   int forReduce;
+  String mapOutputFilename;
   
   public ShuffleHeader() { }
   
@@ -54,13 +61,25 @@ public class ShuffleHeader implements Writable {
     this.compressedLength = compressedLength;
     this.uncompressedLength = uncompressedLength;
     this.forReduce = forReduce;
+    this.mapOutputFilename = "";
   }
   
+   public ShuffleHeader(String mapId, long compressedLength,
+      long uncompressedLength, int forReduce,
+      String mapOutputFilename) {
+    this.mapId = mapId;
+    this.compressedLength = compressedLength;
+    this.uncompressedLength = uncompressedLength;
+    this.forReduce = forReduce;
+    this.mapOutputFilename = mapOutputFilename;
+  }
+
   public void readFields(DataInput in) throws IOException {
     mapId = WritableUtils.readStringSafely(in, MAX_ID_LENGTH);
     compressedLength = WritableUtils.readVLong(in);
     uncompressedLength = WritableUtils.readVLong(in);
     forReduce = WritableUtils.readVInt(in);
+    mapOutputFilename = WritableUtils.readStringSafely(in, MAX_FILENAME_LENGTH);
   }
 
   public void write(DataOutput out) throws IOException {
@@ -68,5 +87,6 @@ public class ShuffleHeader implements Writable {
     WritableUtils.writeVLong(out, compressedLength);
     WritableUtils.writeVLong(out, uncompressedLength);
     WritableUtils.writeVInt(out, forReduce);
+    Text.writeString(out, mapOutputFilename);
   }
 }

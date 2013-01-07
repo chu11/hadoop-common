@@ -21,6 +21,7 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.File;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
@@ -54,6 +55,8 @@ import org.apache.hadoop.security.ssl.SSLFactory;
 import org.apache.hadoop.mapreduce.task.reduce.MapOutput.Type;
 import org.apache.hadoop.util.Progressable;
 import org.apache.hadoop.util.ReflectionUtils;
+import org.apache.hadoop.fs.FileUtil;
+import org.apache.hadoop.fs.Path;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -351,6 +354,7 @@ class Fetcher<K,V> extends Thread {
     TaskAttemptID mapId = null;
     long decompressedLength = -1;
     long compressedLength = -1;
+    String mapOutputFilename = null;
     
     try {
       long startTime = System.currentTimeMillis();
@@ -363,6 +367,7 @@ class Fetcher<K,V> extends Thread {
         compressedLength = header.compressedLength;
         decompressedLength = header.uncompressedLength;
         forReduce = header.forReduce;
+        mapOutputFilename = header.mapOutputFilename;
       } catch (IllegalArgumentException e) {
         badIdErrs.increment(1);
         LOG.warn("Invalid map id ", e);
@@ -400,6 +405,8 @@ class Fetcher<K,V> extends Thread {
       if (mapOutput.getType() == Type.MEMORY) {
         shuffleToMemory(host, mapOutput, input, 
                         (int) decompressedLength, (int) compressedLength);
+      } else if (mapOutput.getType() == Type.SYMLINK) {
+        shuffleByLink(host, mapOutput, input, compressedLength, mapOutputFilename);
       } else {
         shuffleToDisk(host, mapOutput, input, compressedLength);
       }
@@ -617,5 +624,24 @@ class Fetcher<K,V> extends Thread {
                             compressedLength + ")"
       );
     }
+  }
+
+  private void shuffleByLink(MapHost host, MapOutput<K,V> mapOutput, 
+                             InputStream input, 
+                             long compressedLength,
+                             String mapOutputFilename)
+  throws IOException {
+    Path outputPath = mapOutput.getOutputPath();
+
+    /* Check if file exists, not sure if there is Hadoop util lib for this */
+    File localF = new File(mapOutputFilename);
+
+    if (!localF.isFile()) {
+      throw new IOException("Invalid mapOutputFilename to symlink to " +
+                            mapOutputFilename);
+    }
+    String symLinkPath = outputPath.toString();
+    LOG.info("Symlinking " + symLinkPath + " to " + mapOutputFilename);
+    FileUtil.symLink(mapOutputFilename, symLinkPath);
   }
 }

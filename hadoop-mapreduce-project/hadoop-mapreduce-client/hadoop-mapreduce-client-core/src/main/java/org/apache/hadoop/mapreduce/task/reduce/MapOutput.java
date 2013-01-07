@@ -44,7 +44,8 @@ public class MapOutput<K,V> {
   public static enum Type {
     WAIT,
     MEMORY,
-    DISK
+    DISK,
+    SYMLINK,
   }
   
   private final int id;
@@ -91,6 +92,29 @@ public class MapOutput<K,V> {
     this.primaryMapOutput = primaryMapOutput;
   }
   
+  public MapOutput(TaskAttemptID mapId, MergeManager<K,V> merger,
+            JobConf conf, boolean primaryMapOutput, MapOutputFile mapOutputFile)
+         throws IOException {
+    this.id = ID.incrementAndGet();
+    this.mapId = mapId;
+    this.merger = merger;
+
+    type = Type.SYMLINK;
+
+    memory = null;
+    byteStream = null;
+
+    this.size = 0;
+    
+    this.localFS = FileSystem.getLocal(conf);
+    outputPath =
+      mapOutputFile.getInputFileForWrite(mapId.getTaskID(),size);
+    tmpOutputPath = null;
+    disk = null;
+
+    this.primaryMapOutput = primaryMapOutput;
+  }
+
   public MapOutput(TaskAttemptID mapId, MergeManager<K,V> merger, int size, 
             boolean primaryMapOutput) {
     this.id = ID.incrementAndGet();
@@ -181,6 +205,8 @@ public class MapOutput<K,V> {
     } else if (type == Type.DISK) {
       localFS.rename(tmpOutputPath, outputPath);
       merger.closeOnDiskFile(outputPath);
+    } else if (type == Type.SYMLINK) {
+      merger.closeOnDiskFile(outputPath);
     } else {
       throw new IOException("Cannot commit MapOutput of type WAIT!");
     }
@@ -194,6 +220,12 @@ public class MapOutput<K,V> {
         localFS.delete(tmpOutputPath, false);
       } catch (IOException ie) {
         LOG.info("failure to clean up " + tmpOutputPath, ie);
+      }
+    } else if (type == Type.SYMLINK) {
+      try {
+        localFS.delete(outputPath, false);
+      } catch (IOException ie) {
+        LOG.info("failure to clean up " + outputPath, ie);
       }
     } else {
       throw new IllegalArgumentException

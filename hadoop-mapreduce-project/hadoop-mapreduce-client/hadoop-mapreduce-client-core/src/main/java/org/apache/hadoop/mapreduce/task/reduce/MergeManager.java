@@ -250,6 +250,16 @@ public class MergeManager<K, V> {
                                              long requestedSize,
                                              int fetcher
                                              ) throws IOException {
+    boolean symlink;
+
+    symlink = jobConf.getBoolean(MRJobConfig.SHUFFLE_SYMLINK_MAPOUTPUTS,
+                                 false);
+
+    if (symlink) {
+      LOG.info(mapId + ": Shuffling via symlink");
+      return new MapOutput<K,V>(mapId, this, jobConf, true, mapOutputFile);
+    }
+
     if (!canShuffleToMemory(requestedSize)) {
       LOG.info(mapId + ": Shuffling to disk since " + requestedSize + 
                " is greater than maxSingleShuffleLimit (" + 

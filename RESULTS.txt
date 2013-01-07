@@ -1,0 +1,107 @@
+The following are the sort times of tests done on 16 nodes sorting 1G,
+4G, and 16G of data.
+
+1G w/o symlink - 35s, 32s, 35s, 34s
+1G w/ symlink - 30s, 28s, 33s, 29s
+
+4G w/o symlink - 77s, 80s, 84s, 75s
+4G w/ symlink - 117s, 123s, 116s, 116s
+
+20G w/o symlink - 335s, 349s, 333s, 332s
+20G w/ symlink - 523s, 528s, 538s, 547s
+
+While there are some points where the symlink shuffle improves
+performance and outweighs the slowdown of mappers sending data to
+reducers, it is clear when there is only 1 reducer, the performance
+benefits are outweighed very quickly.
+
+It is interesting to see how the symlink shuffle affects the reducing.
+Notice in this 20G run w/o symlinking:
+
+14:36:35,029 INFO Job:1295 - map 0% reduce 0%
+14:36:42,104 INFO Job:1295 - map 1% reduce 0%
+14:36:44,117 INFO Job:1295 - map 6% reduce 0%
+14:36:45,125 INFO Job:1295 - map 36% reduce 0%
+14:36:46,131 INFO Job:1295 - map 39% reduce 0%
+14:36:48,151 INFO Job:1295 - map 40% reduce 0%
+14:36:49,158 INFO Job:1295 - map 41% reduce 0%
+14:36:50,165 INFO Job:1295 - map 45% reduce 0%
+14:36:51,175 INFO Job:1295 - map 48% reduce 0%
+14:36:52,181 INFO Job:1295 - map 59% reduce 0%
+14:36:53,188 INFO Job:1295 - map 69% reduce 0%
+14:36:54,194 INFO Job:1295 - map 77% reduce 0%
+14:36:55,200 INFO Job:1295 - map 79% reduce 0%
+14:36:56,206 INFO Job:1295 - map 83% reduce 2%
+14:36:57,212 INFO Job:1295 - map 87% reduce 2%
+14:36:58,218 INFO Job:1295 - map 97% reduce 2%
+14:36:59,224 INFO Job:1295 - map 99% reduce 3%
+14:37:00,230 INFO Job:1295 - map 100% reduce 3%
+14:37:05,257 INFO Job:1295 - map 100% reduce 5%
+14:37:11,291 INFO Job:1295 - map 100% reduce 7%
+14:37:17,320 INFO Job:1295 - map 100% reduce 8%
+14:37:24,349 INFO Job:1295 - map 100% reduce 9%
+14:37:27,362 INFO Job:1295 - map 100% reduce 10%
+14:37:30,374 INFO Job:1295 - map 100% reduce 11%
+14:37:39,412 INFO Job:1295 - map 100% reduce 13%
+14:37:45,437 INFO Job:1295 - map 100% reduce 14%
+14:37:51,461 INFO Job:1295 - map 100% reduce 16%
+14:37:57,485 INFO Job:1295 - map 100% reduce 18%
+14:38:03,509 INFO Job:1295 - map 100% reduce 19%
+14:38:09,534 INFO Job:1295 - map 100% reduce 21%
+14:38:15,558 INFO Job:1295 - map 100% reduce 22%
+14:38:21,583 INFO Job:1295 - map 100% reduce 24%
+14:38:27,608 INFO Job:1295 - map 100% reduce 25%
+14:38:33,632 INFO Job:1295 - map 100% reduce 26%
+
+and this 20G run w/ symlinking:
+
+15:45:44,443 INFO Job:1295 - map 0% reduce 0%
+15:45:51,512 INFO Job:1295 - map 1% reduce 0%
+15:45:53,528 INFO Job:1295 - map 12% reduce 0%
+15:45:54,536 INFO Job:1295 - map 38% reduce 0%
+15:45:55,543 INFO Job:1295 - map 39% reduce 0%
+15:45:57,555 INFO Job:1295 - map 40% reduce 0%
+15:45:59,568 INFO Job:1295 - map 44% reduce 0%
+15:46:00,574 INFO Job:1295 - map 49% reduce 0%
+15:46:01,582 INFO Job:1295 - map 61% reduce 0%
+15:46:02,588 INFO Job:1295 - map 75% reduce 0%
+15:46:03,594 INFO Job:1295 - map 77% reduce 0%
+15:46:05,606 INFO Job:1295 - map 81% reduce 0%
+15:46:06,612 INFO Job:1295 - map 89% reduce 0%
+15:46:07,618 INFO Job:1295 - map 97% reduce 27%
+15:46:08,623 INFO Job:1295 - map 99% reduce 27%
+15:46:09,629 INFO Job:1295 - map 100% reduce 27%
+15:46:10,635 INFO Job:1295 - map 100% reduce 33%
+15:51:56,051 INFO Job:1295 - map 100% reduce 66%
+15:51:59,062 INFO Job:1295 - map 100% reduce 67%
+15:52:05,084 INFO Job:1295 - map 100% reduce 68%
+
+w/o symlinking the amount of time it takes for the mappers to send
+data to the reducer takes an overwhelming amount of time, so much so
+that when the mappers are done (i.e. 100%) the reducer is only a few
+percent complete. But w/ symlinking, sending data to the reducer is
+almost zero cost. So by the time the mappers are done, the reducer is
+already over 30% done.
+
+However, the merging and all of the map output data from the 1 reducer
+is a bottleneck and affects the entire overall execution time. Note
+the jump for 33% to 66% that took about 5 minutes. I imagine this is
+the period in time that all of the merging is done. Normally the
+merging is amortized over time as data comes in from mappers, but
+because sending the map output to the reducer via symlinks is pretty
+much zero time, all the merging must be done in one fell swoop.
+
+It's worth noting that w/o symlinking, the majority of the time map
+output data is sent to the reducer directly to memory, but w/
+symlinking it is not. So I imagine much of the slow down is the fact
+that data must be read into memory for merging to begin.
+
+I need to profile this to confirm though.
+
+For comparative analysis, the following are sort times when 2 reducers
+per node (32 reducers in this case) are used instead of just 1. 
+
+sorting 1G - 26s
+sorting 4G - 31s
+sorting 20G - 60s
+

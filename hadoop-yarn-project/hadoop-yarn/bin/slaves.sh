@@ -24,6 +24,8 @@
 #     Default is ${YARN_CONF_DIR}/slaves.
 #   YARN_CONF_DIR  Alternate conf dir. Default is ${HADOOP_YARN_HOME}/conf.
 #   YARN_SLAVE_SLEEP Seconds to sleep between spawning remote commands.
+#   YARN_SSH_CMD  Specify an alternate remote shell command.
+#     Defaults to ssh if not specified.
 #   YARN_SSH_OPTS Options passed to ssh when running remote commands.
 ##
 
@@ -59,8 +61,10 @@ if [ "$HOSTLIST" = "" ]; then
   fi
 fi
 
+RSH_CMD=${YARN_SSH_CMD:-ssh}
+
 for slave in `cat "$HOSTLIST"|sed  "s/#.*$//;/^$/d"`; do
- ssh $YARN_SSH_OPTS $slave $"${@// /\\ }" \
+ $RSH_CMD $YARN_SSH_OPTS $slave $"${@// /\\ }" \
    2>&1 | sed "s/^/$slave: /" &
  if [ "$YARN_SLAVE_SLEEP" != "" ]; then
    sleep $YARN_SLAVE_SLEEP

@@ -24,6 +24,8 @@
 #     Default is ${HADOOP_CONF_DIR}/slaves.
 #   HADOOP_CONF_DIR  Alternate conf dir. Default is ${HADOOP_PREFIX}/conf.
 #   HADOOP_SLAVE_SLEEP Seconds to sleep between spawning remote commands.
+#   HADOOP_SSH_CMD Specify an alternate remote shell command.
+#     Defaults to ssh if not specified.
 #   HADOOP_SSH_OPTS Options passed to ssh when running remote commands.
 ##
 
@@ -52,9 +54,11 @@ else
   SLAVE_NAMES=$(cat "$SLAVE_FILE" | sed  's/#.*$//;/^$/d')
 fi
 
+RSH_CMD=${HADOOP_SSH_CMD:-ssh}
+
 # start the daemons
 for slave in $SLAVE_NAMES ; do
- ssh $HADOOP_SSH_OPTS $slave $"${@// /\\ }" \
+ $RSH_CMD $HADOOP_SSH_OPTS $slave $"${@// /\\ }" \
    2>&1 | sed "s/^/$slave: /" &
  if [ "$HADOOP_SLAVE_SLEEP" != "" ]; then
    sleep $HADOOP_SLAVE_SLEEP

@@ -26,6 +26,7 @@
 #   YARN_PID_DIR   The pid files are stored. /tmp by default.
 #   YARN_IDENT_STRING   A string representing this instance of hadoop. $USER by default
 #   YARN_NICENESS The scheduling priority for daemons. Defaults to 0.
+#   YARN_SSH_CMD   Specify an alternate remote shell comand
 ##
 
 usage="Usage: yarn-daemon.sh [--config <conf-dir>] [--hosts hostlistfile] (start|stop) <yarn-command> "
@@ -94,6 +95,7 @@ export YARN_ROOT_LOGGER=${YARN_ROOT_LOGGER:-INFO,RFA}
 log=$YARN_LOG_DIR/yarn-$YARN_IDENT_STRING-$command-$HOSTNAME.out
 pid=$YARN_PID_DIR/yarn-$YARN_IDENT_STRING-$command.pid
 YARN_STOP_TIMEOUT=${YARN_STOP_TIMEOUT:-5}
+RSH_CMD=${YARN_SSH_CMD:-ssh}
 
 # Set default scheduling priority
 if [ "$YARN_NICENESS" = "" ]; then
@@ -115,7 +117,7 @@ case $startStop in
 
     if [ "$YARN_MASTER" != "" ]; then
       echo rsync from $YARN_MASTER
-      rsync -a -e ssh --delete --exclude=.svn --exclude='logs/*' --exclude='contrib/hod/logs/*' $YARN_MASTER/ "$HADOOP_YARN_HOME"
+      rsync -a -e $RSH_CMD --delete --exclude=.svn --exclude='logs/*' --exclude='contrib/hod/logs/*' $YARN_MASTER/ "$HADOOP_YARN_HOME"
     fi
 
     hadoop_rotate_log $log

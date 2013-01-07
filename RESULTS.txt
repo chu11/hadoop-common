@@ -105,3 +105,21 @@ sorting 1G - 26s
 sorting 4G - 31s
 sorting 20G - 60s
 
+----
+
+When setting the HDFS block size to 128M and Lustre LFS stripe to 128M the
+results were different
+
+sorting 4G w/o symlink - 74s, 78s, 79s
+sorting 4G w/ symlink - 54s, 56s, 53s 
+
+sorting 8G w/o symlink - 141s, 140s, 131s
+sorting 8G w/ symlink - 220s, 216s, 216s
+
+sorting 16G w/o symlink -  257s, 252s
+sorting 16G w/ symlink - 419s, 404s
+
+Remarkably different results than before (note I'm sorting 16G instead of 20G,
+I don't know why I picked 20G before).  It still shows that the symlink
+patch affecting 1 reducer has its limits, but the point at which it is
+an issue is larger than immediately thought.

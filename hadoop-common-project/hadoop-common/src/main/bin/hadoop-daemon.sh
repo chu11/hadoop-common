@@ -26,6 +26,7 @@
 #   HADOOP_PID_DIR   The pid files are stored. /tmp by default.
 #   HADOOP_IDENT_STRING   A string representing this instance of hadoop. $USER by default
 #   HADOOP_NICENESS The scheduling priority for daemons. Defaults to 0.
+#   HADOOP_SSH_CMD   Specify an alternate remote shell comand
 ##
 
 usage="Usage: hadoop-daemon.sh [--config <conf-dir>] [--hosts hostlistfile] [--script script] (start|stop) <hadoop-command> <args...>"
@@ -113,6 +114,7 @@ export HDFS_AUDIT_LOGGER=${HDFS_AUDIT_LOGGER:-"INFO,NullAppender"}
 log=$HADOOP_LOG_DIR/hadoop-$HADOOP_IDENT_STRING-$command-$HOSTNAME.out
 pid=$HADOOP_PID_DIR/hadoop-$HADOOP_IDENT_STRING-$command.pid
 HADOOP_STOP_TIMEOUT=${HADOOP_STOP_TIMEOUT:-5}
+RSH_CMD=${HADOOP_SSH_CMD:-ssh}
 
 # Set default scheduling priority
 if [ "$HADOOP_NICENESS" = "" ]; then
@@ -134,7 +136,7 @@ case $startStop in
 
     if [ "$HADOOP_MASTER" != "" ]; then
       echo rsync from $HADOOP_MASTER
-      rsync -a -e ssh --delete --exclude=.svn --exclude='logs/*' --exclude='contrib/hod/logs/*' $HADOOP_MASTER/ "$HADOOP_PREFIX"
+      rsync -a -e $RSH_CMD --delete --exclude=.svn --exclude='logs/*' --exclude='contrib/hod/logs/*' $HADOOP_MASTER/ "$HADOOP_PREFIX"
     fi
 
     hadoop_rotate_log $log

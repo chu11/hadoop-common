@@ -1,0 +1,111 @@
+Performance is far better than the 1 reducer symlink patch, however
+overall performance has not improved. On very small cases such as 1G
+sorts it improved a lot (from 25s to 19s), however performance was
+slightly worse on bigger data sorts (not as bad as with 1 reducer
+sorts). The issue appears to be due to merging/spilling.
+
+Here's the counters results from a 32G sort. This was a sort run over
+16 datanodes w/ 16 reducers. It took 62 seconds to sort w/o
+symlinking, 86 seconds w/ symlinking (in contrast with was ~140s vs
+~216s with the 1 reducer version of this).
+
+From w/o symlink
+
+Job Counters
+Launched map tasks=256
+Launched reduce tasks=16
+Rack-local map tasks=256
+Total time spent by all maps in occupied slots (ms)=1601986
+Total time spent by all reduces in occupied slots (ms)=2342372
+Map-Reduce Framework
+Map input records=3271287
+Map output records=3271287
+Map output bytes=34386136200
+Map output materialized bytes=34404551067
+Input split bytes=32256
+Combine input records=0
+Combine output records=0
+Reduce input groups=3271287
+Reduce shuffle bytes=34404551067
+Reduce input records=3271287
+Reduce output records=3271287
+Spilled Records=6302763
+Shuffled Maps =4096
+Failed Shuffles=0
+Merged Map outputs=4096
+GC time elapsed (ms)=30615
+CPU time spent (ms)=1842310
+Physical memory (bytes) snapshot=231263424512
+Virtual memory (bytes) snapshot=466503995392
+Total committed heap usage (bytes)=259284926464
+Shuffle Errors
+BAD_ID=0
+CONNECTION=0
+IO_ERROR=0
+WRONG_LENGTH=0
+WRONG_MAP=0
+WRONG_REDUCE=0
+File Input Format Counters
+Bytes Read=34477112453
+File Output Format Counters
+Bytes Written=34473162152
+
+w/ symlink
+
+Job Counters
+Launched map tasks=256
+Launched reduce tasks=16
+Rack-local map tasks=256
+Total time spent by all maps in occupied slots (ms)=1598574
+Total time spent by all reduces in occupied slots (ms)=3939208
+Map-Reduce Framework
+Map input records=3272042
+Map output records=3272042
+Map output bytes=34386194507
+Map output materialized bytes=34404614426
+Input split bytes=32256
+Combine input records=0
+Combine output records=0
+Reduce input groups=3272042
+Reduce shuffle bytes=34404614426
+Reduce input records=3272042
+Reduce output records=3272042
+Spilled Records=11361326
+Shuffled Maps =4096
+Failed Shuffles=0
+Merged Map outputs=4096
+GC time elapsed (ms)=10267
+CPU time spent (ms)=1891370
+Physical memory (bytes) snapshot=187597516800
+Virtual memory (bytes) snapshot=466686484480
+Total committed heap usage (bytes)=216922587136
+Shuffle Errors
+BAD_ID=0
+CONNECTION=0
+IO_ERROR=0
+WRONG_LENGTH=0
+WRONG_MAP=0
+WRONG_REDUCE=0
+File Input Format Counters
+Bytes Read=34476870857
+File Output Format Counters
+Bytes Written=34473221739
+
+You'll notice that spilled records is much higher in the symlink case
+than the non-symlink case 6302763 vs 11361326. It's almost 2X more
+spill records.
+
+Now that I've analyzed the code more, I believe I know the
+problem. Normally, when map output segments are transferred from
+Mapper to Reducer, they go into memory (unless its too big, which it
+goes to disk, but this isn't the common scenario). The in memory
+segments are merged with other segments as they arrive and only when
+they are all together too big to fit in memory do they get dumped to
+disk.
+
+In the merging code in the reducer, it is assumed that when you merge
+segments stored on disk, it's because the merge segment is already too
+large for memory. So ... what that really means is there are probably
+many tiny merges and/or unnecessary spills that are happening. It
+would be better for tiny segments to be brought into memory, merged in
+memory, then dumped to disk later.

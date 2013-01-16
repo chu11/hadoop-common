@@ -44,7 +44,8 @@ public class MapOutput<K,V> {
   public static enum Type {
     WAIT,
     MEMORY,
-    DISK
+    DISK,
+    SYMLINK,
   }
   
   private final int id;
@@ -65,6 +66,8 @@ public class MapOutput<K,V> {
   private final Type type;
   
   private final boolean primaryMapOutput;
+
+  private int reducer;
   
   public MapOutput(TaskAttemptID mapId, MergeManager<K,V> merger, long size, 
             JobConf conf, LocalDirAllocator localDirAllocator,
@@ -89,8 +92,36 @@ public class MapOutput<K,V> {
     disk = localFS.create(tmpOutputPath);
     
     this.primaryMapOutput = primaryMapOutput;
+
+    this.reducer = -1;
   }
   
+  public MapOutput(TaskAttemptID mapId, MergeManager<K,V> merger,
+            JobConf conf, boolean primaryMapOutput,
+            MapOutputFile mapOutputFile, int reducer)
+         throws IOException {
+    this.id = ID.incrementAndGet();
+    this.mapId = mapId;
+    this.merger = merger;
+
+    type = Type.SYMLINK;
+
+    memory = null;
+    byteStream = null;
+
+    this.size = 0;
+    
+    this.localFS = FileSystem.getLocal(conf);
+    outputPath =
+      mapOutputFile.getInputFileForWrite(mapId.getTaskID(),size);
+    tmpOutputPath = null;
+    disk = null;
+
+    this.primaryMapOutput = primaryMapOutput;
+
+    this.reducer = reducer;
+  }
+
   public MapOutput(TaskAttemptID mapId, MergeManager<K,V> merger, int size, 
             boolean primaryMapOutput) {
     this.id = ID.incrementAndGet();
@@ -109,6 +140,7 @@ public class MapOutput<K,V> {
     tmpOutputPath = null;
     
     this.primaryMapOutput = primaryMapOutput;
+    this.reducer = -1;
   }
 
   public MapOutput(TaskAttemptID mapId) {
@@ -128,7 +160,8 @@ public class MapOutput<K,V> {
     tmpOutputPath = null;
 
     this.primaryMapOutput = false;
-}
+    this.reducer = -1;
+  }
   
   public boolean isPrimaryMapOutput() {
     return primaryMapOutput;
@@ -175,12 +208,18 @@ public class MapOutput<K,V> {
     return size;
   }
 
+  public int getReducer() {
+    return reducer;
+  }
+
   public void commit() throws IOException {
     if (type == Type.MEMORY) {
       merger.closeInMemoryFile(this);
     } else if (type == Type.DISK) {
       localFS.rename(tmpOutputPath, outputPath);
       merger.closeOnDiskFile(outputPath);
+    } else if (type == Type.SYMLINK) {
+      merger.closeOnDiskFile(outputPath, reducer);
     } else {
       throw new IOException("Cannot commit MapOutput of type WAIT!");
     }
@@ -194,6 +233,12 @@ public class MapOutput<K,V> {
         localFS.delete(tmpOutputPath, false);
       } catch (IOException ie) {
         LOG.info("failure to clean up " + tmpOutputPath, ie);
+      }
+    } else if (type == Type.SYMLINK) {
+      try {
+        localFS.delete(outputPath, false);
+      } catch (IOException ie) {
+        LOG.info("failure to clean up " + outputPath, ie);
       }
     } else {
       throw new IllegalArgumentException

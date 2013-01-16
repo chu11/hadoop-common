@@ -1,0 +1,12 @@
+There are many reads of the index file, which generally are small files.  Not
+sure of overall affect this has.
+
+The OnDiskData object should be more generalized, and maybe hold more
+data like the index file name.
+
+There was a lot of cut & paste on the reading the index file code, should be dealt
+with somehow. 
+
+Many for-each loops are working off lists or Sets, which may not be that
+optimal.
+

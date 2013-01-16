@@ -64,6 +64,7 @@ import org.apache.hadoop.security.ssl.SSLFactory;
 import org.apache.hadoop.mapreduce.security.token.JobTokenIdentifier;
 import org.apache.hadoop.mapreduce.security.token.JobTokenSecretManager;
 import org.apache.hadoop.mapreduce.task.reduce.ShuffleHeader;
+import org.apache.hadoop.mapreduce.MRJobConfig;
 import org.apache.hadoop.metrics2.MetricsSystem;
 import org.apache.hadoop.metrics2.annotation.Metric;
 import org.apache.hadoop.metrics2.annotation.Metrics;
@@ -538,11 +539,32 @@ public class ShuffleHandler extends AbstractService
           indexFileName);
       final IndexRecord info = 
         indexCache.getIndexInformation(mapId, reduce, indexFileName, user);
-      final ShuffleHeader header =
-        new ShuffleHeader(mapId, info.partLength, info.rawLength, reduce);
+
+      boolean symlink;
+      symlink = conf.getBoolean(MRJobConfig.SHUFFLE_SYMLINK_MAPOUTPUTS,
+				false);
+
+      final ShuffleHeader header;
+
+      if (symlink) {
+        header = new ShuffleHeader(mapId, info.partLength, info.rawLength, reduce,
+                                   mapOutputFileName.toString(), indexFileName.toString());
+      }
+      else {
+        header = new ShuffleHeader(mapId, info.partLength, info.rawLength, reduce);
+      }
+
       final DataOutputBuffer dob = new DataOutputBuffer();
       header.write(dob);
-      ch.write(wrappedBuffer(dob.getData(), 0, dob.getLength()));
+
+      ChannelFuture writeFuture;
+      writeFuture = ch.write(wrappedBuffer(dob.getData(), 0, dob.getLength()));
+
+      if (symlink) {
+        metrics.shuffleConnections.incr();
+	return writeFuture;
+      }
+
       final File spillfile = new File(mapOutputFileName.toString());
       RandomAccessFile spill;
       try {
@@ -551,7 +573,6 @@ public class ShuffleHandler extends AbstractService
         LOG.info(spillfile + " not found");
         return null;
       }
-      ChannelFuture writeFuture;
       if (ch.getPipeline().get(SslHandler.class) == null) {
         final FadvisedFileRegion partition = new FadvisedFileRegion(spill,
             info.startOffset, info.partLength, manageOsCache, readaheadLength,
@@ -573,6 +594,7 @@ public class ShuffleHandler extends AbstractService
             spillfile.getAbsolutePath());
         writeFuture = ch.write(chunk);
       }
+
       metrics.shuffleConnections.incr();
       metrics.shuffleOutputBytes.incr(info.partLength); // optimistic
       return writeFuture;

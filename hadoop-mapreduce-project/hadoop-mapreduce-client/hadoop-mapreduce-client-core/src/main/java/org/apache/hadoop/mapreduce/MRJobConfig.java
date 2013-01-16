@@ -269,6 +269,8 @@ public interface MRJobConfig {
   public static final String MAX_SHUFFLE_FETCH_RETRY_DELAY = "mapreduce.reduce.shuffle.retry-delay.max.ms";
   public static final long DEFAULT_MAX_SHUFFLE_FETCH_RETRY_DELAY = 60000;
 
+  public static final String SHUFFLE_SYMLINK_MAPOUTPUTS = "mapreduce.reduce.shuffle.symlink-mapoutputs";
+
   public static final String REDUCE_SKIP_INCR_PROC_COUNT = "mapreduce.reduce.skip.proc-count.auto-incr";
 
   public static final String REDUCE_SKIP_MAXGROUPS = "mapreduce.reduce.skip.maxgroups";

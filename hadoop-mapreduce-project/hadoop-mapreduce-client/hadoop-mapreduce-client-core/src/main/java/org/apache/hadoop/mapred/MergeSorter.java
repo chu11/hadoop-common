@@ -21,6 +21,7 @@ import java.util.Comparator;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.util.MergeSort;
 import org.apache.hadoop.io.SequenceFile.Sorter.RawKeyValueIterator;
+import org.apache.hadoop.mapred.MergeSorter;
 
 /** This class implements the sort method from BasicTypeSorterBase class as
  * MergeSort. Note that this class is really a wrapper over the actual

@@ -24,6 +24,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.io.InputStream;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -34,9 +35,15 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalDirAllocator;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.io.DataInputBuffer;
 import org.apache.hadoop.io.RawComparator;
 import org.apache.hadoop.io.compress.CompressionCodec;
+import org.apache.hadoop.io.compress.CodecPool;
+import org.apache.hadoop.io.compress.Decompressor;
+import org.apache.hadoop.io.compress.DefaultCodec;
+import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.mapred.IFileInputStream;
 import org.apache.hadoop.mapred.Counters;
 import org.apache.hadoop.mapred.IFile;
 import org.apache.hadoop.mapred.JobConf;
@@ -55,6 +62,8 @@ import org.apache.hadoop.mapreduce.MRJobConfig;
 import org.apache.hadoop.mapreduce.TaskAttemptID;
 import org.apache.hadoop.mapreduce.TaskID;
 import org.apache.hadoop.mapreduce.task.reduce.MapOutput.MapOutputComparator;
+import org.apache.hadoop.mapreduce.task.reduce.OnDiskData;
+import org.apache.hadoop.mapreduce.task.reduce.OnDiskData.OnDiskDataComparator;
 import org.apache.hadoop.util.Progress;
 import org.apache.hadoop.util.ReflectionUtils;
 
@@ -89,7 +98,7 @@ public class MergeManager<K, V> {
     new TreeSet<MapOutput<K,V>>(new MapOutputComparator<K, V>());
   private final MergeThread<MapOutput<K,V>, K,V> inMemoryMerger;
   
-  Set<Path> onDiskMapOutputs = new TreeSet<Path>();
+  Set<OnDiskData> onDiskMapOutputs = new TreeSet<OnDiskData>(new OnDiskDataComparator());
   private final OnDiskMerger onDiskMerger;
   
   private final long memoryLimit;
@@ -217,7 +226,7 @@ public class MergeManager<K, V> {
     this.inMemoryMerger = createInMemoryMerger();
     this.inMemoryMerger.start();
     
-    this.onDiskMerger = new OnDiskMerger(this);
+    this.onDiskMerger = new OnDiskMerger(this, jobConf);
     this.onDiskMerger.start();
     
     this.mergePhase = mergePhase;
@@ -246,10 +255,33 @@ public class MergeManager<K, V> {
   
   final private MapOutput<K,V> stallShuffle = new MapOutput<K,V>(null);
 
+  public MapOutput<K,V> reserve(TaskAttemptID mapId,
+                                long requestedSize,
+                                int fetcher) throws IOException {
+    return reserve(mapId, requestedSize, fetcher, -1, -1, -1, -1);
+  }
+
   public synchronized MapOutput<K,V> reserve(TaskAttemptID mapId, 
                                              long requestedSize,
-                                             int fetcher
+                                             int fetcher,
+                                             int reducer,
+					     long startOffset,
+					     long compressedLength,
+                                             long uncompressedLength
                                              ) throws IOException {
+    boolean symlink;
+
+    symlink = jobConf.getBoolean(MRJobConfig.SHUFFLE_SYMLINK_MAPOUTPUTS,
+                                 false);
+
+    if (symlink) {
+      LOG.info(mapId + ": Shuffling via symlink");
+      return new MapOutput<K,V>(mapId, this, jobConf, true,
+                                mapOutputFile, reducer,
+                                startOffset, compressedLength,
+                                uncompressedLength);
+    }
+
     if (!canShuffleToMemory(requestedSize)) {
       LOG.info(mapId + ": Shuffling to disk since " + requestedSize + 
                " is greater than maxSingleShuffleLimit (" + 
@@ -337,12 +369,96 @@ public class MergeManager<K, V> {
              inMemoryMergedMapOutputs.size());
   }
   
-  public synchronized void closeOnDiskFile(Path file) {
-    onDiskMapOutputs.add(file);
+  public synchronized void closeOnDiskFile(TaskAttemptID mapId,
+                                           Path file,
+                                           int reducer,
+                                           long startOffset,
+                                           long compressedLength,
+                                           long uncompressedLength) throws IOException {
+    boolean symlinkmerge;
+
+    symlinkmerge = jobConf.getBoolean(MRJobConfig.SHUFFLE_SYMLINK_MERGE, false);
+
+    if (symlinkmerge && mapId != null && reducer >= 0 && startOffset >= 0
+        && compressedLength > 0 && uncompressedLength > 0) {
+
+       if (canShuffleToMemory(uncompressedLength)) {
+         if (usedMemory <= memoryLimit) {
+           LOG.info("onDiskShuffle trying: usedmemory " + usedMemory + " memoryLimit " + memoryLimit);
+           
+           MapOutput<K, V> mapOutput = unconditionalReserve(mapId, uncompressedLength, true);
+
+           FSDataInputStream in = rfs.open(file);
+           in.seek(startOffset);
+
+           IFileInputStream checksumIn =
+             new IFileInputStream(in, compressedLength, jobConf);
+
+           InputStream input = checksumIn;
+
+           CompressionCodec codec;
+           Decompressor decompressor;
+
+           if (jobConf.getCompressMapOutput()) { 
+             Class<? extends CompressionCodec> codecClass = jobConf.getMapOutputCompressorClass(DefaultCodec.class);
+             codec = ReflectionUtils.newInstance(codecClass, jobConf);
+             decompressor = CodecPool.getDecompressor(codec);
+           }
+           else {
+             codec = null;
+             decompressor = null;
+           }
+
+           if (codec != null) {
+             decompressor.reset();
+             input = codec.createInputStream(input, decompressor);
+           }
+
+	   byte[] mem = mapOutput.getMemory();
+
+           try {
+	       IOUtils.readFully(input, mem, 0, (int)uncompressedLength);
+             LOG.info("onDiskShuffle Moved " + uncompressedLength + " bytes into memory");
+           } catch (IOException ioe) {
+             // Close the streams
+             IOUtils.cleanup(LOG, input);
+
+             // Re-throw
+             throw ioe;
+           }
+
+           in.close();
+
+           closeInMemoryFile(mapOutput);
+
+           // achu: Do I need to delete the original symlink?  I dunno, figure out later
+
+           return;
+         }
+         else {
+           LOG.info("cannot onDiskShuffle to memory : usedmemory " + usedMemory + 
+                    " memoryLimit " + memoryLimit);
+         }
+       }
+       else {
+         LOG.info("cannot onDiskShuffle to memory : uncompressedLength" + uncompressedLength);
+       }
+    }
+    else {
+      LOG.info("no onDiskShuffle to memory : " + mapId + ", "+ symlinkmerge + ", " + reducer +
+               ", " + startOffset + ", " + compressedLength + ", " + uncompressedLength); 
+    }
+
+    onDiskMapOutputs.add(new OnDiskData(file, reducer, startOffset,
+                                        compressedLength, uncompressedLength));
     
     if (onDiskMapOutputs.size() >= (2 * ioSortFactor - 1)) {
       onDiskMerger.startMerge(onDiskMapOutputs);
     }
+  }
+
+  public synchronized void closeOnDiskFile(Path file) throws IOException {
+    closeOnDiskFile(null, file, -1, -1, -1, -1);
   }
   
   public RawKeyValueIterator close() throws Throwable {
@@ -356,7 +472,7 @@ public class MergeManager<K, V> {
     List<MapOutput<K, V>> memory = 
       new ArrayList<MapOutput<K, V>>(inMemoryMergedMapOutputs);
     memory.addAll(inMemoryMapOutputs);
-    List<Path> disk = new ArrayList<Path>(onDiskMapOutputs);
+    List<OnDiskData> disk = new ArrayList<OnDiskData>(onDiskMapOutputs);
     return finalMerge(jobConf, rfs, memory, disk);
   }
    
@@ -493,17 +609,27 @@ public class MergeManager<K, V> {
     }
 
   }
-  
-  private class OnDiskMerger extends MergeThread<Path,K,V> {
+
+  private class OnDiskMerger extends MergeThread<OnDiskData,K,V> {
+
+    private JobConf jobConf;
     
     public OnDiskMerger(MergeManager<K, V> manager) {
       super(manager, Integer.MAX_VALUE, exceptionReporter);
       setName("OnDiskMerger - Thread to merge on-disk map-outputs");
       setDaemon(true);
+      jobConf = null;
+    }
+
+    public OnDiskMerger(MergeManager<K, V> manager, JobConf jobConf) {
+      super(manager, Integer.MAX_VALUE, exceptionReporter);
+      setName("OnDiskMerger - Thread to merge on-disk map-outputs");
+      setDaemon(true);
+      this.jobConf = jobConf;  
     }
     
     @Override
-    public void merge(List<Path> inputs) throws IOException {
+    public void merge(List<OnDiskData> inputs) throws IOException {
       // sanity check
       if (inputs == null || inputs.isEmpty()) {
         LOG.info("No ondisk files to merge...");
@@ -518,8 +644,16 @@ public class MergeManager<K, V> {
                " map outputs on disk. Triggering merge...");
       
       // 1. Prepare the list of files to be merged. 
-      for (Path file : inputs) {
-        approxOutputSize += localFS.getFileStatus(file).getLen();
+      for (OnDiskData data : inputs) {
+          int reducer = data.getReducer();
+          if (reducer < 0) {
+	    approxOutputSize += localFS.getFileStatus(data.getPath()).getLen();
+            LOG.info("normal approxOutputSize " + approxOutputSize); 
+          }
+          else {
+	    approxOutputSize += data.getCompressedLength();
+            LOG.info("symlink approxOutputSize " + approxOutputSize); 
+	  }
       }
 
       // add the checksum length
@@ -528,7 +662,7 @@ public class MergeManager<K, V> {
 
       // 2. Start the on-disk merge process
       Path outputPath = 
-        localDirAllocator.getLocalPathForWrite(inputs.get(0).toString(), 
+	localDirAllocator.getLocalPathForWrite(inputs.get(0).getPath().toString(), 
             approxOutputSize, jobConf).suffix(Task.MERGED_OUTPUT_PREFIX);
       Writer<K,V> writer = 
         new Writer<K,V>(jobConf, rfs, outputPath, 
@@ -541,7 +675,7 @@ public class MergeManager<K, V> {
         iter = Merger.merge(jobConf, rfs,
                             (Class<K>) jobConf.getMapOutputKeyClass(),
                             (Class<V>) jobConf.getMapOutputValueClass(),
-                            codec, inputs.toArray(new Path[inputs.size()]), 
+                            codec, inputs, 
                             true, ioSortFactor, tmpDir, 
                             (RawComparator<K>) jobConf.getOutputKeyComparator(), 
                             reporter, spilledRecordsCounter, null, 
@@ -653,7 +787,7 @@ public class MergeManager<K, V> {
 
   private RawKeyValueIterator finalMerge(JobConf job, FileSystem fs,
                                        List<MapOutput<K,V>> inMemoryMapOutputs,
-                                       List<Path> onDiskMapOutputs
+                                       List<OnDiskData> onDiskMapOutputs
                                        ) throws IOException {
     LOG.info("finalMerge called with " + 
              inMemoryMapOutputs.size() + " in-memory map-outputs and " + 
@@ -712,7 +846,7 @@ public class MergeManager<K, V> {
         try {
           Merger.writeFile(rIter, writer, reporter, job);
           // add to list of final disk outputs.
-          onDiskMapOutputs.add(outputPath);
+          onDiskMapOutputs.add(new OnDiskData(outputPath));
         } catch (IOException e) {
           if (null != outputPath) {
             try {
@@ -742,18 +876,39 @@ public class MergeManager<K, V> {
     // segments on disk
     List<Segment<K,V>> diskSegments = new ArrayList<Segment<K,V>>();
     long onDiskBytes = inMemToDiskBytes;
-    Path[] onDisk = onDiskMapOutputs.toArray(new Path[onDiskMapOutputs.size()]);
-    for (Path file : onDisk) {
-      onDiskBytes += fs.getFileStatus(file).getLen();
-      LOG.debug("Disk file: " + file + " Length is " + 
-          fs.getFileStatus(file).getLen());
-      diskSegments.add(new Segment<K, V>(job, fs, file, codec, keepInputs,
-                                         (file.toString().endsWith(
-                                             Task.MERGED_OUTPUT_PREFIX) ?
-                                          null : mergedMapOutputsCounter)
-                                        ));
+    for (OnDiskData data : onDiskMapOutputs) {
+      int reducer = data.getReducer();
+      long onDiskBytesTmp = 0;
+      if (reducer < 0) {
+        LOG.info("reducer < 0");
+        onDiskBytesTmp = fs.getFileStatus(data.getPath()).getLen();
+      }
+      else {
+        LOG.info("Symlink length w/ " + data.getCompressedLength());
+        onDiskBytesTmp = data.getCompressedLength();
+      }
+      LOG.info("Disk file: " + data.getPath() + " Length is " + onDiskBytesTmp + " reducer " + reducer);
+      onDiskBytes += onDiskBytesTmp;
+      if (reducer < 0) {
+        LOG.info("diskSegment reducer < 0");
+        diskSegments.add(new Segment<K, V>(job, fs, data.getPath(),codec, keepInputs,
+                                           (data.getPath().toString().endsWith(
+                                               Task.MERGED_OUTPUT_PREFIX) ?
+                                            null : mergedMapOutputsCounter)
+                                          ));
+      }
+      else {
+	  LOG.info("diskSegment offset " + data.getStartOffset() + " partLength " + data.getCompressedLength());
+        diskSegments.add(new Segment<K, V>(job, fs, data.getPath(),
+                                           data.getStartOffset(), data.getCompressedLength(),
+                                           codec, keepInputs,
+                                           (data.getPath().toString().endsWith(
+                                               Task.MERGED_OUTPUT_PREFIX) ?
+                                            null : mergedMapOutputsCounter)
+                                          ));
+      }
     }
-    LOG.info("Merging " + onDisk.length + " files, " +
+    LOG.info("Merging " + onDiskMapOutputs.size() + " files, " +
              onDiskBytes + " bytes from disk");
     Collections.sort(diskSegments, new Comparator<Segment<K,V>>() {
       public int compare(Segment<K, V> o1, Segment<K, V> o2) {

@@ -1,0 +1,23 @@
+In the following example case I sorted 32G on 16 nodes w/ 16 reducers.
+
+time to sort w/o symlink 63 seconds
+time to sort w/ symlink & no memory merging 89 seconds
+time to sort w/ symlink & memory merging 78 seconds
+
+spills w/o symlink 6112425
+spills w/ symlink & no memory merging 11354690
+spills w/ symlink & memory merging 6167372
+
+So the spills are close to the w/o symlink case, which is pretty good. In the
+w/o symlink case, Hadoop is smart enough to stall shuffling if they are
+temporarily out of memory. I didn't do something that sophisticated in this
+first round patch (stalling to some extent doesn't make any sense. B/c of the
+symlink, the shuffle is already done).
+
+At the end of the day, I think my biggest mistake was I put the code into
+closeOnDiskFiles(), which is a synchronized section. So I began to serialize
+an operation that was a lot faster before. I need to put it in the background
+OnDiskMerging code section.
+
+
+

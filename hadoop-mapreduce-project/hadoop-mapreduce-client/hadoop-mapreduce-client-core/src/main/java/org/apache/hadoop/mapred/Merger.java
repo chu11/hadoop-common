@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.ListIterator;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -39,6 +40,10 @@ import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.mapred.IFile.Reader;
 import org.apache.hadoop.mapred.IFile.Writer;
 import org.apache.hadoop.mapreduce.MRConfig;
+import org.apache.hadoop.mapreduce.task.reduce.OnDiskData;
+import org.apache.hadoop.mapred.SpillRecord;
+import org.apache.hadoop.mapred.IndexRecord;
+
 import org.apache.hadoop.util.PriorityQueue;
 import org.apache.hadoop.util.Progress;
 import org.apache.hadoop.util.Progressable;
@@ -80,6 +85,28 @@ public class Merger {
                             Class<K> keyClass, Class<V> valueClass, 
                             CompressionCodec codec,
                             Path[] inputs, boolean deleteInputs, 
+                            int mergeFactor, Path tmpDir,
+                            RawComparator<K> comparator,
+                            Progressable reporter,
+                            Counters.Counter readsCounter,
+                            Counters.Counter writesCounter,
+                            Counters.Counter mergedMapOutputsCounter,
+                            Progress mergePhase)
+  throws IOException {
+    return 
+      new MergeQueue<K, V>(conf, fs, inputs, deleteInputs, codec, comparator, 
+                           reporter, mergedMapOutputsCounter).merge(
+                                           keyClass, valueClass,
+                                           mergeFactor, tmpDir,
+                                           readsCounter, writesCounter,
+                                           mergePhase);
+  }
+
+  public static <K extends Object, V extends Object>
+  RawKeyValueIterator merge(Configuration conf, FileSystem fs,
+                            Class<K> keyClass, Class<V> valueClass, 
+                            CompressionCodec codec,
+                            List<OnDiskData> inputs, boolean deleteInputs, 
                             int mergeFactor, Path tmpDir,
                             RawComparator<K> comparator,
                             Progressable reporter,
@@ -421,6 +448,46 @@ public class Merger {
                                        (file.toString().endsWith(
                                            Task.MERGED_OUTPUT_PREFIX) ? 
                                         null : mergedMapOutputsCounter)));
+      }
+      
+      // Sort segments on file-lengths
+      Collections.sort(segments, segmentComparator); 
+    }
+
+    public MergeQueue(Configuration conf, FileSystem fs, 
+                      List<OnDiskData> inputs, boolean deleteInputs, 
+                      CompressionCodec codec, RawComparator<K> comparator,
+                      Progressable reporter, 
+                      Counters.Counter mergedMapOutputsCounter) 
+    throws IOException {
+      this.conf = conf;
+      this.fs = fs;
+      this.codec = codec;
+      this.comparator = comparator;
+      this.reporter = reporter;
+      
+      for (OnDiskData data : inputs) {
+	LOG.info("MergeQ OnDiskData: adding: " + data.getPath());
+        int reducer = data.getReducer(); 
+        if (reducer < 0) {
+          LOG.info("Creating segment w/o index");
+          segments.add(new Segment<K, V>(conf, fs, data.getPath(),
+                                         codec, !deleteInputs, 
+                                         (data.getPath().toString().endsWith(
+                                             Task.MERGED_OUTPUT_PREFIX) ? 
+                                          null : mergedMapOutputsCounter)));
+        }
+        else {
+          LOG.info("Creating segment w/ index data " + data.getPath() + " reducer " + reducer);
+          LOG.info("Symlink offset " + data.getStartOffset() + " partLength " + data.getCompressedLength());
+          segments.add(new Segment<K, V>(conf, fs, data.getPath(),
+                                         data.getStartOffset(), data.getCompressedLength(),
+                                         codec, !deleteInputs, 
+                                         (data.getPath().toString().endsWith(
+                                             Task.MERGED_OUTPUT_PREFIX) ? 
+                                          null : mergedMapOutputsCounter)));
+
+        }
       }
       
       // Sort segments on file-lengths

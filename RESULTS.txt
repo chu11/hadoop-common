@@ -1,0 +1,35 @@
+Sorting 32G on 16 nodes w/ 8 reducers.
+
+time to sort w/o symlink 82 seconds
+time to sort w/ symlink & no memory merging 123 seconds
+time to sort w/ symlink & memory merging 102 seconds
+
+spills w/o symlink 6313024
+spills w/ symlink & no memory merging 11372181
+spills w/ symlink & memory merging 7921754
+
+Sorting 32G on 16 nodes w/ 16 reducers.
+
+time to sort w/o symlink 61 seconds
+time to sort w/ symlink & no memory merging 84 seconds
+time to sort w/ symlink & memory merging 67 seconds
+
+spills w/o symlink 6297756
+spills w/ symlink & no memory merging 11360741
+spills w/ symlink & memory merging 6301421
+
+Sorting 32G on 16 nodes w/ 32 reducers.
+
+time to sort w/o symlink 64 seconds
+time to sort w/ symlink & no memory merging 94 seconds
+time to sort w/ symlink & memory merging 66 seconds
+
+spills w/o symlink 6294656
+spills w/ symlink & no memory merging 11338007
+spills w/ symlink & memory merging 6295466
+
+So the spills are very close to the w/o symlink case, which is
+expected given this patch's implementation.  The spills are very
+similar to the results in
+HADOOP9109_symlinkshuffle_manyreducer_mergeoptimization1 but the time
+is much better, due to not loading data in a critical section.

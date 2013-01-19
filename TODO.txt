@@ -1,0 +1,13 @@
+Many for-each loops are working off lists or Sets, which may not be that
+optimal.
+
+Will this work w/ compressed data?  I'm not entirely sure.  Figure out/test
+later.
+
+I'm passing a lot of parameters around, probably could encapsulate in some
+object and pass around.  Figure out later.
+
+if symlink merge, need to delete original symlink ??? or will hadoop do for
+me?  I don't think so but did not verify in code
+
+Need to move memory load of segments into non-critical section.  Oops

@@ -1,23 +1,25 @@
-In the following example case I sorted 32G on 16 nodes w/ 16 reducers.
+Results sorting 32G on 16 nodes w/ 16 reducers.
 
-time to sort w/o symlink 63 seconds
-time to sort w/ symlink & no memory merging 89 seconds
-time to sort w/ symlink & memory merging 78 seconds
+no symlinking - 63 seconds, 6.30M spills
+symlinking w/o in memory merging - 86 seconds, 11.35M spills 
+symlinking w/ in memory merging - 83 seconds, 11.35M spills
 
-spills w/o symlink 6112425
-spills w/ symlink & no memory merging 11354690
-spills w/ symlink & memory merging 6167372
+the in memory merging had no affect. Main issue was when I tried to merge data
+from disk into memory it was too big for memory. Lets try to shrink the amount
+of data per reducer.
 
-So the spills are close to the w/o symlink case, which is pretty good. In the
-w/o symlink case, Hadoop is smart enough to stall shuffling if they are
-temporarily out of memory. I didn't do something that sophisticated in this
-first round patch (stalling to some extent doesn't make any sense. B/c of the
-symlink, the shuffle is already done).
+Using 32 reducers on 16 nodes sorting 16G
 
-At the end of the day, I think my biggest mistake was I put the code into
-closeOnDiskFiles(), which is a synchronized section. So I began to serialize
-an operation that was a lot faster before. I need to put it in the background
-OnDiskMerging code section.
+no symlinking - 34 seconds, 1.63M spills
+symlinking w/o in memory merging - 51 seconds, 5.67M spills
+symlinking w/ in memory merging - 48 seconds, 4.06M spills
 
+Here we begin to see the positive affects.
+
+I think it may be better to bring in individual files into memory
+(like in HADOOP9109_symlinkshuffle_manyreducer_mergeoptimization1) and
+let in memory code merge it rather that merge from disk and store into
+memory. Perhaps through some additional thread. That's the next patch
+attempt.
 
 

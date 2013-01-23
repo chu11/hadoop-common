@@ -1,0 +1,16 @@
+Sorting 32G on 16 nodes w/ 8 reducers.
+
+time to sort w/ symlink & memory merging 95 seconds
+spills w/ symlink & memory merging 8079764 
+
+Sorting 32G on 16 nodes w/ 16 reducers.
+
+time to sort w/ symlink & memory merging 66 seconds
+spills w/ symlink & memory merging 6323051
+
+Sorting 32G on 16 nodes w/ 32 reducers.
+
+time to sort w/ symlink & memory merging 68 seconds
+spills w/ symlink & memory merging 6294596
+
+So helps in reduced reducer case.  102 seconds down to 95 seconds.

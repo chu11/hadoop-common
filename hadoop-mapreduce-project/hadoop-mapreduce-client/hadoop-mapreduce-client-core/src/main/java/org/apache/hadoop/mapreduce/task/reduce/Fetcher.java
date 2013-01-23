@@ -21,6 +21,7 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.File;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
@@ -42,6 +43,9 @@ import org.apache.hadoop.io.compress.CodecPool;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.io.compress.Decompressor;
 import org.apache.hadoop.io.compress.DefaultCodec;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.mapred.Counters;
 import org.apache.hadoop.mapred.IFileInputStream;
 import org.apache.hadoop.mapred.JobConf;
@@ -54,6 +58,8 @@ import org.apache.hadoop.security.ssl.SSLFactory;
 import org.apache.hadoop.mapreduce.task.reduce.MapOutput.Type;
 import org.apache.hadoop.util.Progressable;
 import org.apache.hadoop.util.ReflectionUtils;
+import org.apache.hadoop.fs.FileUtil;
+import org.apache.hadoop.fs.Path;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -349,8 +355,10 @@ class Fetcher<K,V> extends Thread {
                                 Set<TaskAttemptID> remaining) {
     MapOutput<K,V> mapOutput = null;
     TaskAttemptID mapId = null;
+    long startOffset = -1;
     long decompressedLength = -1;
     long compressedLength = -1;
+    String mapOutputFilename = null;
     
     try {
       long startTime = System.currentTimeMillis();
@@ -360,9 +368,11 @@ class Fetcher<K,V> extends Thread {
         ShuffleHeader header = new ShuffleHeader();
         header.readFields(input);
         mapId = TaskAttemptID.forName(header.mapId);
+        startOffset = header.startOffset;
         compressedLength = header.compressedLength;
         decompressedLength = header.uncompressedLength;
         forReduce = header.forReduce;
+        mapOutputFilename = header.mapOutputFilename;
       } catch (IllegalArgumentException e) {
         badIdErrs.increment(1);
         LOG.warn("Invalid map id ", e);
@@ -383,7 +393,8 @@ class Fetcher<K,V> extends Thread {
       }
       
       // Get the location for the map output - either in-memory or on-disk
-      mapOutput = merger.reserve(mapId, decompressedLength, id);
+      mapOutput = merger.reserve(mapId, decompressedLength, id, forReduce,
+                                 startOffset, compressedLength, decompressedLength);
       
       // Check if we can shuffle *now* ...
       if (mapOutput.getType() == Type.WAIT) {
@@ -400,6 +411,15 @@ class Fetcher<K,V> extends Thread {
       if (mapOutput.getType() == Type.MEMORY) {
         shuffleToMemory(host, mapOutput, input, 
                         (int) decompressedLength, (int) compressedLength);
+      } else if (mapOutput.getType() == Type.SYMLINK) {
+        mapOutput = shuffleByLink(host, mapOutput, mapOutputFilename,
+                      mapId,
+                      decompressedLength,
+                      id,
+                      forReduce,
+                      startOffset,
+                      compressedLength,
+                      decompressedLength);
       } else {
         shuffleToDisk(host, mapOutput, input, compressedLength);
       }
@@ -617,5 +637,122 @@ class Fetcher<K,V> extends Thread {
                             compressedLength + ")"
       );
     }
+  }
+
+  private MapOutput<K,V> shuffleByLink(MapHost host, MapOutput<K,V> mapOutput, 
+				       String mapOutputFilename,
+				       TaskAttemptID mapId,
+				       long requestedSize,
+				       int fetcher,
+				       int reducer,
+				       long startOffset,
+				       long compressedLength,
+				       long uncompressedLength)
+  throws IOException {
+    Path outputPath = mapOutput.getOutputPath();
+
+    /* Check if file exists, not sure if there is Hadoop util lib for this */
+    File localF = new File(mapOutputFilename);
+
+    if (!localF.isFile()) {
+      throw new IOException("Invalid mapOutputFilename to symlink to " +
+                            mapOutputFilename);
+    }
+
+    String symLinkFilePath = outputPath.toString();
+    LOG.info("Symlinking " + symLinkFilePath + " to " + mapOutputFilename);
+    FileUtil.symLink(mapOutputFilename, symLinkFilePath);
+
+    boolean symlinkshuffle;
+    boolean symlinkmerge;
+
+    symlinkshuffle = job.getBoolean(MRJobConfig.SHUFFLE_SYMLINK_MAPOUTPUTS,
+                                        false);
+    symlinkmerge = job.getBoolean(MRJobConfig.SHUFFLE_SYMLINK_MERGE, false);
+
+    if (symlinkshuffle && symlinkmerge) {
+
+      MapOutput<K,V> memmap;
+      int waitcount = 0;
+
+      // Wait no more than .5 seconds 
+      while (true) {
+        memmap  = merger.reserve(mapId, uncompressedLength, id);
+        if (memmap.getType() == Type.WAIT) {
+          waitcount++;
+
+          if (waitcount >= 25) {
+            LOG.info("DiskToMem fetcher#" + id + " - skipping load");
+            return mapOutput;
+          }
+ 
+          LOG.info("DiskToMem memory wait " + id);
+	  try {
+	      Thread.sleep(20);
+	  }
+	  catch (InterruptedException e) {
+	      // Ignore for time being
+	      LOG.info("DiskToMem InterruptedException");
+	  }
+	  continue;
+        }
+
+	break;
+      }
+
+      LOG.info("Attempt to DiskToMem " + startOffset + ", " + uncompressedLength);
+
+      FileSystem rfs;
+      FileSystem localFS = FileSystem.getLocal(job);
+      rfs = ((LocalFileSystem)localFS).getRaw();
+
+      FSDataInputStream in = rfs.open(outputPath);
+      in.seek(startOffset);
+
+      IFileInputStream checksumIn =
+        new IFileInputStream(in, compressedLength, job);
+
+      InputStream input = checksumIn;
+
+      CompressionCodec codec;
+      Decompressor decompressor;
+
+      if (job.getCompressMapOutput()) {
+        Class<? extends CompressionCodec> codecClass = job.getMapOutputCompressorClass(DefaultCodec.class);
+        codec = ReflectionUtils.newInstance(codecClass, job);
+        decompressor = CodecPool.getDecompressor(codec);
+      }
+      else {
+        codec = null;
+        decompressor = null;
+      }
+
+      if (codec != null) {
+        decompressor.reset();
+        input = codec.createInputStream(input, decompressor);
+      }
+
+      byte[] mem = memmap.getMemory();
+
+      try {
+        IOUtils.readFully(input, mem, 0, (int)uncompressedLength);
+        LOG.info("DiskToMem Moved " + uncompressedLength + " bytes into memory");
+      } catch (IOException ioe) {
+        // Close the streams
+        IOUtils.cleanup(LOG, input);
+
+        // Re-throw
+        throw ioe;
+      }
+
+      in.close();
+
+      return memmap;
+    }
+    else {
+	LOG.info("DiskToMem No " + symlinkshuffle + ", " + symlinkmerge);
+    }
+    
+    return mapOutput;
   }
 }

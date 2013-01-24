@@ -14,3 +14,49 @@ time to sort w/ symlink & memory merging 68 seconds
 spills w/ symlink & memory merging 6294596
 
 So helps in reduced reducer case.  102 seconds down to 95 seconds.
+
+Stripe Size/Stripe Count
+
+w/o symlink
+128M/1 62s
+64M/1  61s
+64M/2  62s
+32M/1  68s
+32M/2  61s
+32M/4  65s
+16M/1  65s
+16M/2  61s
+16M/4  66s
+16M/8  64s
+8M/1   65s
+8M/2   63s
+8M/4   61s
+8M/8   69s
+4M/1   64s
+4M/2   67s
+4M/4   64s
+4M/8   64s
+
+w/ symlink (wait if mem full)
+128M/1 72s
+64M/1  72s
+64M/2  69s
+32M/1  71s
+32M/2  69s
+32M/4  70s
+16M/1  67s
+16M/2  73s
+16M/4  70s
+16M/8  73s
+8M/1   72s
+8M/2   69s
+8M/4   72s
+8M/8   70s
+4M/1   73s
+4M/2   72s
+4M/4   74s
+4M/8   69s
+
+Overall, stripe doesn't seem to have that much of an affect as long
+as job and Lustre stripe are reasonable.
+

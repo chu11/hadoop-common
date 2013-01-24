@@ -9,3 +9,6 @@ object and pass around.  Figure out later.
 
 if symlink merge, need to delete original symlink ??? or will hadoop do for
 me?  I don't think so but did not verify in code
+
+put off fetching of data on disk to another thread, in Fetcher.java probably
+not optimal.

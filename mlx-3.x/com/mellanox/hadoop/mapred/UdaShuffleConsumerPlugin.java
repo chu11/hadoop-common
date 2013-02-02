@@ -110,10 +110,10 @@ class MapOutputLocation {
 
 
 
-public class UdaShuffleConsumerPlugin<K, V> extends ShuffleConsumerPlugin{
+public class UdaShuffleConsumerPlugin<K, V> implements ShuffleConsumerPlugin<K, V> {
 	
 	protected ReduceTask reduceTask;
-	protected TaskAttemptID reduceId;
+	protected org.apache.hadoop.mapreduce.TaskAttemptID reduceId;
 	protected TaskUmbilicalProtocol umbilical; // Reference to the umbilical object
 	protected JobConf jobConf;
 	protected FileSystem localFS;
@@ -128,38 +128,19 @@ public class UdaShuffleConsumerPlugin<K, V> extends ShuffleConsumerPlugin{
 	/**
 		* initialize this ShuffleConsumer instance.  
 	*/
-  public void init( org.apache.hadoop.mapreduce.TaskAttemptID reduceId, JobConf jobConf, FileSystem localFS,
-                 TaskUmbilicalProtocol umbilical,
-                 LocalDirAllocator localDirAllocator,  
-                 Reporter reporter,
-                 CompressionCodec codec,
-//                 Class<? extends org.apache.hadoop.mapred.Reducer> combinerClass,
-                java.lang.Class combinerClass,
-//                 CombineOutputCollector<K,V> combineCollector,
-                 CombineOutputCollector combineCollector,
-                 Counters.Counter spilledRecordsCounter,
-                 Counters.Counter reduceCombineInputCounter,
-                 Counters.Counter shuffledMapsCounter,
-                 Counters.Counter reduceShuffleBytes,
-                 Counters.Counter failedShuffleCounter,
-                 Counters.Counter mergedMapOutputsCounter,
-                 TaskStatus status,
-                 Progress copyPhase,
-                 Progress mergePhase,
-                 Task reduceTask,
-                 MapOutputFile mapOutputFile) {
-
-		this.reduceTask = (ReduceTask)reduceTask;
-		this.reduceId = reduceTask.getTaskID();
+  @Override
+  public void init(ShuffleConsumerPlugin.Context context) {
+		this.reduceTask = (ReduceTask)context.getReduceTask();
+		this.reduceId = context.getReduceId();
 		
-		this.umbilical = umbilical;
-		this.jobConf = jobConf;
-		this.localFS = localFS;
-		this.reporter = reporter;
+		this.umbilical = context.getUmbilical();
+		this.jobConf = context.getJobConf();
+		this.localFS = context.getLocalFS();
+		this.reporter = context.getReporter();
 
 		try {
-//			configureClasspath(jobConf);
-			this.rdmaChannel = new UdaPluginRT<K,V>(this, this.reduceTask, jobConf, reporter, this.reduceTask.getNumMaps());
+//			configureClasspath(this.jobConf);
+			this.rdmaChannel = new UdaPluginRT<K,V>(this, this.reduceTask, this.jobConf, this.reporter, this.reduceTask.getNumMaps());
 		} catch (java.io.IOException e) {
 			LOG.error("UdaShuffleConsumerPlugin: init got exception");
 		}

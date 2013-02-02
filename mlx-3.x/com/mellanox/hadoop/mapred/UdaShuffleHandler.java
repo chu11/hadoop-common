@@ -65,7 +65,8 @@ public class UdaShuffleHandler extends AbstractService implements AuxServices.Au
 
  private Configuration config;
 
-  
+    private int port;
+
   public static final String MAPREDUCE_RDMA_SHUFFLE_SERVICEID =
       "uda.shuffle";
 
@@ -73,7 +74,7 @@ public class UdaShuffleHandler extends AbstractService implements AuxServices.Au
     new ConcurrentHashMap<String,String>();
 
   public UdaShuffleHandler() {
-	  super("rdmashuffle");
+	  super("uda.shuffle");
 	  LOG.info("c-tor of UdaShuffleHandler");
   }
 
@@ -112,7 +113,8 @@ public class UdaShuffleHandler extends AbstractService implements AuxServices.Au
     LOG.info("start of UdaShuffleHandler");
     rdmaChannel = new UdaPluginSH(config);	  
 	super.start();
-	LOG.info("start of UdaShuffleHandler is done");
+	port = config.getInt("mapred.rdma.cma.port", 9011);
+	LOG.info("start of UdaShuffleHandler is done w/ port " + port);
   }
   
   
@@ -126,21 +128,50 @@ public class UdaShuffleHandler extends AbstractService implements AuxServices.Au
   }
   
   public static ByteBuffer serializeServiceData(Token<JobTokenIdentifier> jobToken) throws IOException {
-    //TODO these bytes should be versioned
-    DataOutputBuffer jobToken_dob = new DataOutputBuffer();
-    jobToken.write(jobToken_dob);
-    return ByteBuffer.wrap(jobToken_dob.getData(), 0, jobToken_dob.getLength());
+      //TODO these bytes should be versioned
+      DataOutputBuffer jobToken_dob = new DataOutputBuffer();
+      jobToken.write(jobToken_dob);
+      return ByteBuffer.wrap(jobToken_dob.getData(), 0, jobToken_dob.getLength());
+  }
+
+  static Token<JobTokenIdentifier> deserializeServiceData(ByteBuffer secret) throws IOException {
+      DataInputByteBuffer in = new DataInputByteBuffer();
+      in.reset(secret);
+      Token<JobTokenIdentifier> jt = new Token<JobTokenIdentifier>();
+      jt.readFields(in);
+      return jt;
+  }
+
+  /**
+   * Serialize the shuffle port into a ByteBuffer for use later on.
+   * @param port the port to be sent to the ApplciationMaster
+   * @return the serialized form of the port.
+   */
+  public static ByteBuffer serializeMetaData(int port) throws IOException {
+      //TODO these bytes should be versioned
+      DataOutputBuffer port_dob = new DataOutputBuffer();
+      port_dob.writeInt(port);
+      return ByteBuffer.wrap(port_dob.getData(), 0, port_dob.getLength());
+  }
+
+  public static int deserializeMetaData(ByteBuffer meta) throws IOException {
+      //TODO this should be returning a class not just an int
+      DataInputByteBuffer in = new DataInputByteBuffer();
+      in.reset(meta);
+      int port = in.readInt();
+      return port;
   }
  
   @Override
   public synchronized ByteBuffer getMeta() {
-  //  try {
-   //   return serializeMetaData(port); 
-//    } catch (IOException e) {
-//      LOG.error("Error during getMeta", e);
-//      // TODO add API to AuxiliaryServices to report failures
-      return null;
-    }
+      try {
+	  return serializeMetaData(port); 
+      } catch (IOException e) {
+	  LOG.error("Error during getMeta", e);
+	  // TODO add API to AuxiliaryServices to report failures
+	  return null;
+      }
   }
+}
 
   

@@ -507,8 +507,9 @@ class UdaPluginSH extends UdaPlugin {
 	
 	//this code is copied from ShuffleHandler.sendMapOutput
 	static DataPassToJni getPathIndex(String jobIDStr, String mapId, int reduce){
-		 String user = userRsrc.get(jobIDStr);
+//		 String user = userRsrc.get(jobIDStr);
 //		String user = "katyak";
+             String user = "achu";
 	     DataPassToJni data = null;
 	        
 	     JobID jobID = JobID.forName(jobIDStr);

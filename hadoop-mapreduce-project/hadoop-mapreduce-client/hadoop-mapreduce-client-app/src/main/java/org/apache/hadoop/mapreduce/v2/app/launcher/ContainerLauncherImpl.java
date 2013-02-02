@@ -49,6 +49,7 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.yarn.YarnException;
+import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.api.ContainerManager;
 import org.apache.hadoop.yarn.api.protocolrecords.StartContainerRequest;
 import org.apache.hadoop.yarn.api.protocolrecords.StartContainerResponse;
@@ -156,8 +157,13 @@ public class ContainerLauncherImpl extends AbstractService implements
         startRequest.setContainerLaunchContext(containerLaunchContext);
         StartContainerResponse response = proxy.startContainer(startRequest);
 
-        ByteBuffer portInfo = response
-          .getServiceResponse(ShuffleHandler.MAPREDUCE_SHUFFLE_SERVICEID);
+        //ByteBuffer portInfo = response
+        //  .getServiceResponse(ShuffleHandler.MAPREDUCE_SHUFFLE_SERVICEID);
+	Configuration conf = getConfig();
+        String[] anames = conf.getStrings(YarnConfiguration.NM_AUX_SERVICES, "mapreduce.shuffle");
+        LOG.info("Aux Service = " + anames[0]);
+        ByteBuffer portInfo = response.getServiceResponse(anames[0]);
+        LOG.info("portInfo = " + portInfo);
         int port = -1;
         if(portInfo != null) {
           port = ShuffleHandler.deserializeMetaData(portInfo);

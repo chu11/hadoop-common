@@ -291,7 +291,6 @@ extern "C" index_record* UdaBridge_invoke_getPathUda_callback(JNIEnv * jniEnv, c
 	log(lsTRACE, "before jniEnv->CallStaticObjectMethod...");
 	jobject jdata = jniEnv->CallStaticObjectMethod(jclassUdaBridge, jmethodID_getPathUda, jstr_job,  jstr_map, reduceId);
 	log(lsTRACE, "after  jniEnv->CallStaticObjectMethod...");
-	index_record *data = (index_record*) malloc(sizeof(index_record));
 
 	jclass cls_data = jniEnv->GetObjectClass(jdata);
 	if (fidOffset == NULL) {
@@ -327,6 +326,7 @@ extern "C" index_record* UdaBridge_invoke_getPathUda_callback(JNIEnv * jniEnv, c
 		 }
 	 }
 
+	index_record *data = (index_record*) malloc(sizeof(index_record));
 	data->offset = (int64_t) jniEnv->GetLongField(jdata, fidOffset);
 	data->rawLength = (int64_t) jniEnv->GetLongField(jdata, fidRawLength);
 	data->partLength = (int64_t) jniEnv->GetLongField(jdata, fidPartLength);

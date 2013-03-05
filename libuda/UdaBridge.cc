@@ -285,12 +285,12 @@ extern "C" void UdaBridge_invoke_dataFromUda_callback(JNIEnv * jniEnv, jobject j
 }
 
 extern "C" index_record* UdaBridge_invoke_getPathUda_callback(JNIEnv * jniEnv, const char* job_id, const char* map_id, int reduceId) {
-	log(lsTRACE, "before jniEnv->CallStaticVoidMethod...");
 	jstring jstr_job, jstr_map;
 	jstr_job = jniEnv->NewStringUTF(job_id);
 	jstr_map = jniEnv->NewStringUTF(map_id); //NewStringUTF allocates a string inside the JVM which will release it
-	log(lsTRACE, "after  jniEnv->CallStaticVoidMethod...");
+	log(lsTRACE, "before jniEnv->CallStaticObjectMethod...");
 	jobject jdata = jniEnv->CallStaticObjectMethod(jclassUdaBridge, jmethodID_getPathUda, jstr_job,  jstr_map, reduceId);
+	log(lsTRACE, "after  jniEnv->CallStaticObjectMethod...");
 	index_record *data = (index_record*) malloc(sizeof(index_record));
 
 	jclass cls_data = jniEnv->GetObjectClass(jdata);

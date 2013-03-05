@@ -292,6 +292,11 @@ extern "C" index_record* UdaBridge_invoke_getPathUda_callback(JNIEnv * jniEnv, c
 	jobject jdata = jniEnv->CallStaticObjectMethod(jclassUdaBridge, jmethodID_getPathUda, jstr_job,  jstr_map, reduceId);
 	log(lsTRACE, "after  jniEnv->CallStaticObjectMethod...");
 
+	if (!jdata) {
+		 log(lsERROR, "-->> In C++ java getPathUda method failed");
+		 return NULL;
+	}
+
 	jclass cls_data = jniEnv->GetObjectClass(jdata);
 	if (fidOffset == NULL) {
 		fidOffset = jniEnv->GetFieldID(cls_data, "startOffset", "J");

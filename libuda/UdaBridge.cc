@@ -352,8 +352,9 @@ extern "C" jobject UdaBridge_registerDirectByteBuffer(JNIEnv * jniEnv,  void* ad
 
 	if (jbuf) {
 		jbuf = (jobject) jniEnv->NewWeakGlobalRef(jbuf); // Don't let GC to reclaim it while we need it
-		if (!jbuf)
+		if (!jbuf) {
 			log(lsERROR, "failed NewWeakGlobalRef");
+		}
 	}
 	else {
 		log(lsERROR, "failed NewDirectByteBuffer");

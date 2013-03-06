@@ -22,6 +22,8 @@
 #include <sys/epoll.h>
 #include <malloc.h>
 #include <netdb.h>
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 #include <errno.h>
 
 #include <infiniband/verbs.h>
@@ -501,7 +503,7 @@ RdmaClient::fetch(client_part_req_t *freq)
     netlev_msg_t h;
 
     /* jobid:mapid:mop_offset:reduceid:mem_addr:req_prt:chunk_size */
-    msg_len = sprintf(h.msg,"%s:%s:%lld:%s:%llu:%llu:%ld",
+    msg_len = sprintf(h.msg,"%s:%s:%" PRId64 ":%s:%" PRIu64 ":%" PRIu64 ":%" PRId32,
                       freq->info->params[1],
                       freq->info->params[2],
                       freq->mop->total_fetched,

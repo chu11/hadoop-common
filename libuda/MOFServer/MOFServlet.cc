@@ -28,7 +28,7 @@ using namespace std;
 shuffle_req_t* get_shuffle_req(const string &param)
 {
     size_t start;
-    int end;
+    size_t end;
     shuffle_req_t *sreq = new shuffle_req_t();
     auto_ptr<shuffle_req_t> my_auto_ptr ( sreq );
 

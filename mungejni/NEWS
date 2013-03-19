@@ -1,0 +1,159 @@
+This file describes changes in recent versions of genders. It
+primarily documents those changes that are of interest to users
+and admins.
+
+Changes in genders-1.21
+=======================
+ -- Add Java extensions for libgenders.
+
+Changes in genders-1.20
+=======================
+ -- Fix typo in Genders Python extension.
+ -- Support --with-non-shortened-hostnames compile option.
+
+Changes in genders-1.19
+=======================
+ -- By default install perl to vendorarch instead of sitearch.
+
+Changes in genders-1.18
+=======================
+ -- Support -A option in nodeattr, to output all nodes.
+ -- Support --expand and --compress options in nodeattr, to output
+    expanded or compressed genders databases.
+ -- Support new libgenders flags.
+
+Changes in genders-1.17
+=======================
+ -- Fix RHEL6 build bugs.
+
+Changes in genders-1.16
+=======================
+ -- Support --with-perl-vendor-arch and --with-perl-site-arch
+    configure options.
+
+Changes in genders-1.15
+=======================
+ -- Fix genders_parse() corner case.
+ -- Fix genders_testattr() corner case.
+ -- Fix potential genders_parse() corruption corner case.
+ -- Force stricter genders file database format rules
+    - Empty string attributes and values no longer allowed
+      - e.g. "node1 attr1="
+      - e.g. "node1 =val1"
+    - Catch errant commas
+      - e.g. "node1 attr1,"
+      - e.g. "node1 attr1,,attr2"
+ -- Include beta Python extensions library.
+ -- Include beta C++ extensions library.
+
+Changes in genders-1.14
+=======================
+ -- Support '+' sign in genders query parsing.
+
+Changes in genders-1.13-2
+=========================
+ -- Fix FC11/RHEL6 portability bugs.
+
+Changes in genders-1.13
+=========================
+ -- Add genders_testquery() library function.
+ -- Add nodeattr -Q option.
+
+Changes in genders-1.12
+=========================
+ -- Greatly improve performance of genders parsing.
+ -- Improve performance of many libgenders functions.
+ -- Parsing error descriptions in genders_parse() may be different than before.
+
+Changes in genders-1.11-4
+=========================
+ -- Support building without perl extensions.
+
+Changes in genders-1.11-3
+=========================
+ -- Fix spec file build requirements.
+
+Changes in genders-1.11-2
+=========================
+ -- Fix Solaris build corner cases.
+
+Changes in genders-1.11-1
+=========================
+ -- Fix hostrange calculation corner cases.
+
+Changes in genders-1.10-1
+=========================
+ -- Minor documentation and bug fixes.
+
+Changes in genders-1.9-1
+========================
+ -- Support -V and -U options in nodeattr.
+ -- Minor bug fixes.
+
+Changes in genders-1.8-1
+========================
+ -- Support empty genders file as degenerate case.
+
+Changes in genders-1.7-1
+========================
+ -- Fix nodeattr -X corner case.
+
+Changes in genders-1.6-1
+========================
+ -- Fix bugs in genders querying.
+ -- AIX port patches from Py Watson.
+ -- Solaris port fixes.
+
+Changes in genders-1.5-2
+========================
+ -- Alter nodeattr --diff output. 
+
+Changes in genders-1.5-1
+========================
+ -- Added nodeattr --diff to compare genders databases.
+ -- Added nodeattr -X option.
+ -- AIX Support.
+
+Changes in genders-1.4-1
+===========================
+ -- Increased genders loading and search speed. 
+ -- Added genders querying ability.
+ -- Removed maximum attribute and value limitations.
+
+Changes in genders-1.3-1
+===========================
+ -- Added fixes for the following corner cases:
+    - duplicate attributes
+    - whitespace between attributes and inline comments
+    - trailing whitespace
+    - no nodes listed
+    - no attributes listed
+ -- Added hostrange nodename support to specify ranges of hosts
+    rather than a single node on each line of the genders file
+ -- Nodes can now be specified on multiple lines
+ -- Re-ordered error return code priority within many API functions.
+    For example, when an array of length 0 is specified,
+    GENDERS_ERR_OVERFLOW may be returned instead of GENDERS_ERR_PARAMETERS.
+ 
+Changes in genders-1.2-1
+===========================
+ -- Removed implicit "all" attribute from compat/gendlib.pl.  If
+    future use of the "all" attribute is required, it must be listed
+    as an attribute of every node in the genders database.  See
+    the genders.sample file for an example.
+ -- Removed use of the /etc/clusters file from compat/gendlib.pl.  If
+    future use of a cluster name is required, it must be listed as the
+    value of the "cluster" attribute for each node in the genders
+    database.  See the genders.sample file for an example.
+ -- Removed -r and -C options from nodeattr.  If future use of the
+    cluster name is required, the value of the "cluster" attribute can
+    be retrieved using the -v option.
+
+Changes in genders-1.2-pre1
+===========================
+ -- Hostlist code in hostlist.pl (genders-compat package only)
+    can now expand ranges without a prefix (.e.g "[0-10]" and "0-10")
+    as well as compress back to this same form.
+ -- started NEWS file.
+
+$Id: NEWS,v 1.37 2010-03-24 21:26:04 chu11 Exp $

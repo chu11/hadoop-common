@@ -1,0 +1,33 @@
+Name:    @PROJECT@ 
+Version: @VERSION@
+Release: @RELEASE@
+Summary: Static cluster configuration database.
+Group: System Environment/Base
+License: GPL
+Source: %{name}-%{version}.tar.gz
+Requires: perl
+BuildRoot: %{_tmppath}/%{name}-%{version}
+
+%description
+MungeJNI is a Java library for the libmunge C library.
+
+%prep
+%setup  -q -n %{name}-%{version}
+
+%build
+%configure --program-prefix=%{?_program_prefix:%{_program_prefix}}
+make 
+
+%install
+rm -rf $RPM_BUILD_ROOT
+DESTDIR="$RPM_BUILD_ROOT" make install 
+
+%files
+%defattr(-,root,root)
+%doc README NEWS ChangeLog COPYING 
+%dir %{_datadir}/doc/%{name}-%{version}-javadoc/
+%doc %{_datadir}/doc/%{name}-%{version}-javadoc/*
+%{_includedir}/*
+%{_javadir}/*
+%{_libdir}/libMungejni.*
+

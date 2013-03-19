@@ -244,6 +244,7 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 MUNGE_JAVA_FILES = \
 	$(srcdir)/gov/llnl/lc/chaos/Munge.java \
+	$(srcdir)/gov/llnl/lc/chaos/MungeDecodeData.java \
 	$(srcdir)/gov/llnl/lc/chaos/MungeException.java \
 	$(srcdir)/gov/llnl/lc/chaos/MungeExceptionSnafu.java \
 	$(srcdir)/gov/llnl/lc/chaos/MungeExceptionBadArg.java \

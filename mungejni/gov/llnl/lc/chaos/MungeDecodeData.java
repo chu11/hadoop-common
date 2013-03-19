@@ -21,7 +21,7 @@ public class MungeDecodeData
     public MungeDecodeData(byte[] buf, long uid, long gid) throws MungeException
     {
 	this.buf = new byte[buf.length];
-	System.arraycopy(this.buf, 0, buf, 0, buf.length);
+	System.arraycopy(buf, 0, this.buf, 0, buf.length);
 	this.uid = uid;
 	this.gid = gid;
     }

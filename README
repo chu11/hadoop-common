@@ -1,0 +1,31 @@
+This is a set of mods to Hadoop to see if performance gains can be
+made by writing merge spills to a local SSD/NVRAM instead of HD/global
+file system.  The assumption is that the SSD is still much smaller in
+capacity than the HD/global file system, therefore you can't store
+HDFS, intermediate files, etc. into the SSD.
+
+This is a complete hack experiment with hard coded paths and space
+limits internally.  There were consequences of changing
+LocalDirAllocator.getLocalPathForWrite for the rest of Hadoop, so I
+just hacked in string mods in the appropriate locations.  I also
+hacked in the space needs so there was a tiered spill (i.e. if SSD
+full, spill to original HD/global file system).  Some re-arch would
+need to be done to do this correctly.  Perhaps an overloaded
+getLocalPathForWrite would be best, but I haven't thought about it too
+much.
+
+Overall, it appears that only spilling to SSDs did not have a dramatic
+effect on performance, if any at all.  The following are the times
+run doing a 250G terasort, on 4 datanodes, with 4 reducers, and each
+node having a 128G local SSD.  The primary filesystem is HDFS running
+over Lustre.
+
+Lustre spill : 2976s, 3046s, 2907s
+
+SSD Spill : 2929s, 3045s, 3591s
+
+The 3591s run from SSD spill is a bit of an anomaly, perhaps due to
+other people running on the cluster at the time.
+
+However, looking at the remaining numbers, it appears that the local
+SSD for just spilling doesn't really effect performance at all.

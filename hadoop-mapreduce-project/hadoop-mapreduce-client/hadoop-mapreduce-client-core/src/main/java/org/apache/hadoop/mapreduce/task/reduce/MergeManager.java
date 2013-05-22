@@ -18,6 +18,7 @@
 package org.apache.hadoop.mapreduce.task.reduce;
 
 import java.io.IOException;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -444,10 +445,24 @@ public class MergeManager<K, V> {
         createInMemorySegments(inputs, inMemorySegments,0);
       int noInMemorySegments = inMemorySegments.size();
 
-      Path outputPath = 
+      Path outputPathorig = 
         mapOutputFile.getInputFileForWrite(mapTaskId,
                                            mergeOutputSize).suffix(
                                                Task.MERGED_OUTPUT_PREFIX);
+
+      String tmp = outputPathorig.toString();
+      Path outputPathSSD = new Path(tmp.replace("/p/wcf/achu/hadoop_data/alhadoop", "/ssd/tmp1/achu/hadoop"));
+
+      File testfile = new File("/ssd/tmp1");
+      long usablebytes = testfile.getUsableSpace();
+
+      Path outputPath;
+
+      // > about 2 gig
+      if (usablebytes > 2000000000)
+         outputPath = outputPathSSD;
+      else
+         outputPath = outputPathorig; 
 
       Writer<K,V> writer = 
         new Writer<K,V>(jobConf, rfs, outputPath,
@@ -527,9 +542,24 @@ public class MergeManager<K, V> {
         ChecksumFileSystem.getChecksumLength(approxOutputSize, bytesPerSum);
 
       // 2. Start the on-disk merge process
-      Path outputPath = 
+      Path outputPathorig = 
         localDirAllocator.getLocalPathForWrite(inputs.get(0).toString(), 
             approxOutputSize, jobConf).suffix(Task.MERGED_OUTPUT_PREFIX);
+
+      String tmp = outputPathorig.toString();
+      Path outputPathSSD = new Path(tmp.replace("/p/wcf/achu/hadoop_data/alhadoop", "/ssd/tmp1/achu/hadoop"));
+
+      File testfile = new File("/ssd/tmp1");
+      long usablebytes = testfile.getUsableSpace();
+
+      Path outputPath;
+
+      // > about 2 gig
+      if (usablebytes > 2000000000)
+         outputPath = outputPathSSD;
+      else
+         outputPath = outputPathorig; 
+
       Writer<K,V> writer = 
         new Writer<K,V>(jobConf, rfs, outputPath, 
                         (Class<K>) jobConf.getMapOutputKeyClass(), 

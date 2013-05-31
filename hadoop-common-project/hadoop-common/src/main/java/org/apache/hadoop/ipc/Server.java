@@ -1956,7 +1956,8 @@ public abstract class Server {
       authMethods.add(AuthenticationMethod.TOKEN.getAuthMethod());
     }
     
-    LOG.debug("Server accepts auth methods:" + authMethods);
+    LOG.info("ALDEBUG Server accepts auth methods: " + authMethods);
+    LOG.info("ALDEBUG confAuthenticationMethod: " + confAuthenticationMethod);
     return authMethods;
   }
   

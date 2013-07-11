@@ -495,6 +495,7 @@ public class Client {
           }
           
           // connection time out is 20s
+	  LOG.info("ALDEBUG: setting up connection");
           NetUtils.connect(this.socket, server, 20000);
           if (rpcTimeout > 0) {
             pingInterval = rpcTimeout;  // rpcTimeout overwrites pingInterval
@@ -593,6 +594,7 @@ public class Client {
           setupConnection();
           InputStream inStream = NetUtils.getInputStream(socket);
           OutputStream outStream = NetUtils.getOutputStream(socket);
+	  LOG.info("ALDEBUG: writing out header");
           writeConnectionHeader(outStream);
           if (authMethod != AuthMethod.SIMPLE) {
             final InputStream in2 = inStream;
@@ -750,6 +752,10 @@ public class Client {
       out.write(Server.HEADER.array());
       out.write(Server.CURRENT_VERSION);
       authMethod.write(out);
+	  {
+	  	LOG.info("ALDEBUG: writing out my name");
+		out.write("achu".getBytes());
+          }
       Server.IpcSerializationType.PROTOBUF.write(out);
       out.flush();
     }

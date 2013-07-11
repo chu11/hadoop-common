@@ -726,6 +726,8 @@ public abstract class Server {
 
         channel.configureBlocking(false);
         channel.socket().setTcpNoDelay(tcpNoDelay);
+
+	LOG.info("ALDEBUG: Server accepted connection");
         
         Reader reader = getReader();
         try {
@@ -1302,7 +1304,7 @@ public abstract class Server {
         if (!connectionHeaderRead) {
           //Every connection is expected to send the header.
           if (connectionHeaderBuf == null) {
-            connectionHeaderBuf = ByteBuffer.allocate(3);
+            connectionHeaderBuf = ByteBuffer.allocate(7);
           }
           count = channelRead(channel, connectionHeaderBuf);
           if (count < 0 || connectionHeaderBuf.remaining() > 0) {
@@ -1312,37 +1314,51 @@ public abstract class Server {
           byte[] method = new byte[] {connectionHeaderBuf.get(1)};
           authMethod = AuthMethod.read(new DataInputStream(
               new ByteArrayInputStream(method)));
+	  LOG.info("ALDEBUG: Server authmethod is " + authMethod);
           dataLengthBuffer.flip();
           
           // Check if it looks like the user is hitting an IPC port
           // with an HTTP GET - this is a common error, so we can
           // send back a simple string indicating as much.
           if (HTTP_GET_BYTES.equals(dataLengthBuffer)) {
+	    LOG.info("ALDEBUG: Server reject on GET");
             setupHttpRequestOnIpcPortResponse();
             return -1;
           }
         
           if (!HEADER.equals(dataLengthBuffer) || version != CURRENT_VERSION) {
             //Warning is ok since this is not supposed to happen.
-            LOG.warn("Incorrect header or version mismatch from " + 
+            LOG.info("ALDEBUG: Incorrect header or version mismatch from " + 
                      hostAddress + ":" + remotePort +
                      " got version " + version + 
                      " expected version " + CURRENT_VERSION);
             setupBadVersionResponse(version);
             return -1;
           }
-          
+
+	  LOG.info("ALDEBUG: Server parsing name");         
+	  byte[] idData = new byte[4];
+	  LOG.info("ALDEBUG: Server get");
+          for (int i = 0; i < 4; i++)
+	    idData[i] = connectionHeaderBuf.get(2+i);
+	  LOG.info("ALDEBUG: New String");
+	  String id = new String (idData);
+	  LOG.info("ALDEBUG: Got string " + id);
+
           IpcSerializationType serializationType = IpcSerializationType
-              .fromByte(connectionHeaderBuf.get(2));
+              .fromByte(connectionHeaderBuf.get(6));
           if (serializationType != IpcSerializationType.PROTOBUF) {
+	    LOG.info("ALDEBUG: Fail on IPC Serialization");
             respondUnsupportedSerialization(serializationType);
             return -1;
           }
           
           dataLengthBuffer.clear();
           if (authMethod == null) {
+	    LOG.info("ALDEBUG: Fail on authmethod");
             throw new IOException("Unable to read authentication method");
           }
+
   
           // this may create a SASL server, or switch us into SIMPLE
           authMethod = initializeAuthContext(authMethod);

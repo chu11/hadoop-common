@@ -1304,10 +1304,11 @@ public abstract class Server {
         if (!connectionHeaderRead) {
           //Every connection is expected to send the header.
           if (connectionHeaderBuf == null) {
-            connectionHeaderBuf = ByteBuffer.allocate(19);
+            connectionHeaderBuf = ByteBuffer.allocate(6);
           }
           count = channelRead(channel, connectionHeaderBuf);
           if (count < 0 || connectionHeaderBuf.remaining() > 0) {
+		LOG.info("ALDEBUG: header error, count " + count + " remaining " + connectionHeaderBuf.remaining());
             return count;
           }
           LOG.info("ALDEBUG: Count = " + count);
@@ -1337,17 +1338,28 @@ public abstract class Server {
             return -1;
           }
 
-	  LOG.info("ALDEBUG: Server parsing name");         
-	  byte[] idData = new byte[16];
+	  LOG.info("ALDEBUG: Server get len");         
+	  int datalen = connectionHeaderBuf.getInt(2);
+	  LOG.info("ALDEBUG: Server datalen " + datalen);
+
+	  ByteBuffer dataBuf = ByteBuffer.allocate(datalen + 1);
+
+  	  count = channelRead(channel, dataBuf);
+	  if (count < 0 || dataBuf.remaining() > 0) {
+		LOG.info("ALDEBUG: error, count " + count + " remaining " + dataBuf.remaining());
+		return count;
+	  }
+
+	  byte[] idData = new byte[datalen];
 	  LOG.info("ALDEBUG: Server get");
-          for (int i = 0; i < 16; i++)
-	    idData[i] = connectionHeaderBuf.get(2+i);
+          for (int i = 0; i < datalen; i++)
+	    idData[i] = dataBuf.get(i);
 	  LOG.info("ALDEBUG: New String");
 	  String id = new String (idData);
 	  LOG.info("ALDEBUG: Got string " + id);
 
           IpcSerializationType serializationType = IpcSerializationType
-              .fromByte(connectionHeaderBuf.get(18));
+              .fromByte(dataBuf.get(datalen));
           if (serializationType != IpcSerializationType.PROTOBUF) {
 	    LOG.info("ALDEBUG: Fail on IPC Serialization");
             respondUnsupportedSerialization(serializationType);
@@ -1363,6 +1375,8 @@ public abstract class Server {
   
           // this may create a SASL server, or switch us into SIMPLE
           authMethod = initializeAuthContext(authMethod);
+
+	  dataBuf = null;
           
           connectionHeaderBuf = null;
           connectionHeaderRead = true;

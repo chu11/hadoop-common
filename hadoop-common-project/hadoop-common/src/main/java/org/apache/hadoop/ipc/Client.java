@@ -754,7 +754,12 @@ public class Client {
       authMethod.write(out);
 	  {
 	  	LOG.info("ALDEBUG: writing out my name");
-		out.write("achu".getBytes());
+		//out.write("achu".getBytes());
+		String username = System.getProperty("user.name");
+		LOG.info("ALDEBUG: writing out " + username + "len = " + username.length());
+		out.write(username.getBytes());
+		for (int i  = 0; i < (16 - username.length()); i++)
+			out.write(" ".getBytes());
           }
       Server.IpcSerializationType.PROTOBUF.write(out);
       out.flush();

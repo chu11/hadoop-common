@@ -241,6 +241,13 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
+    <dependency>
+        <groupId>gov.llnl.lc.chaos</groupId>
+            <artifactId>munge</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>/home/achu/hadoop/hadoop-github-trunk-munge/mungejni/gov/llnl/lc/chaos/Munge.jar</systemPath>
+    </dependency>
   </dependencies>
 
   <build>

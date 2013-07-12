@@ -84,6 +84,8 @@ import org.apache.hadoop.util.Time;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
+import gov.llnl.lc.chaos.*;
+
 /** A client for an IPC service.  IPC calls take a single {@link Writable} as a
  * parameter, and return a {@link Writable} as their value.  A service runs on
  * a port and is defined by a parameter class and a value class.
@@ -753,10 +755,18 @@ public class Client {
       out.write(Server.CURRENT_VERSION);
       authMethod.write(out);
 	  {
-	  	LOG.info("ALDEBUG: writing out my name");
+	  	//LOG.info("ALDEBUG: writing out my name");
 		//out.write("achu".getBytes());
 		String username = System.getProperty("user.name");
 		LOG.info("ALDEBUG: username " + username + "len = " + username.length());
+
+		try {
+			Munge m = new Munge();
+		}
+		catch (MungeException e) {
+			throw new IOException(e.toString());
+		}
+
 		out.writeInt(username.length());
 		out.write(username.getBytes());
           }

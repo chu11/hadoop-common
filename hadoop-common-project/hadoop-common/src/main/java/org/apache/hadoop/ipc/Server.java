@@ -107,6 +107,8 @@ import org.apache.hadoop.util.Time;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import gov.llnl.lc.chaos.*;
+
 /** An abstract IPC service.  IPC calls take a single {@link Writable} as a
  * parameter, and return a {@link Writable} as their value.  A service runs on
  * a port and is defined by a parameter class and a value class.
@@ -1354,6 +1356,14 @@ public abstract class Server {
 	  LOG.info("ALDEBUG: Server get");
           for (int i = 0; i < datalen; i++)
 	    idData[i] = dataBuf.get(i);
+
+	  try {
+		Munge m = new Munge();
+	  }
+	  catch (MungeException e) {
+		throw new IOException(e.toString());
+	  }
+
 	  LOG.info("ALDEBUG: New String");
 	  String id = new String (idData);
 	  LOG.info("ALDEBUG: Got string " + id);

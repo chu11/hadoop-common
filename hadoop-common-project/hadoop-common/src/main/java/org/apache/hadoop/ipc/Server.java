@@ -1356,17 +1356,23 @@ public abstract class Server {
 	  LOG.info("ALDEBUG: Server get");
           for (int i = 0; i < datalen; i++)
 	    idData[i] = dataBuf.get(i);
+	  //LOG.info("ALDEBUG: New String");
+	  //String id = new String (idData);
+	  //LOG.info("ALDEBUG: Got string " + id);
 
 	  try {
 		Munge m = new Munge();
+		MungeDecodeData mdata;
+		String encodedstr = new String(idData);
+		LOG.info("ALDEBUG: Server decoding " + encodedstr);
+		mdata = m.decode(idData);
+		String decodedstr = new String(mdata.getbuf());
+		LOG.info("ALDEBUG: decoded " + decodedstr + "uid " + mdata.getuid() + " gid " + mdata.getgid());
+
 	  }
 	  catch (MungeException e) {
 		throw new IOException(e.toString());
 	  }
-
-	  LOG.info("ALDEBUG: New String");
-	  String id = new String (idData);
-	  LOG.info("ALDEBUG: Got string " + id);
 
           IpcSerializationType serializationType = IpcSerializationType
               .fromByte(dataBuf.get(datalen));

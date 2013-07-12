@@ -759,16 +759,22 @@ public class Client {
 		//out.write("achu".getBytes());
 		String username = System.getProperty("user.name");
 		LOG.info("ALDEBUG: username " + username + "len = " + username.length());
+		//out.writeInt(username.length());
+		//out.write(username.getBytes());
 
 		try {
 			Munge m = new Munge();
+			LOG.info("ALDEBUG: encoding ...");
+			byte[] encodedData = m.encode(username.getBytes());
+			String encodedString = new String(encodedData);
+			LOG.info("ALDEBUG: writing encoded " + encodedString + " length " + encodedData.length);
+			out.writeInt(encodedData.length);
+			out.write(encodedData);
 		}
 		catch (MungeException e) {
 			throw new IOException(e.toString());
 		}
 
-		out.writeInt(username.length());
-		out.write(username.getBytes());
           }
       Server.IpcSerializationType.PROTOBUF.write(out);
       out.flush();

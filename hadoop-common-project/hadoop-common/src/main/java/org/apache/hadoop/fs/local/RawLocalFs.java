@@ -28,6 +28,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.AbstractFileSystem;
 import org.apache.hadoop.fs.DelegateToFileSystem;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FsConstants;
 import org.apache.hadoop.fs.FsServerDefaults;
 import org.apache.hadoop.fs.Path;
@@ -62,6 +63,12 @@ public class RawLocalFs extends DelegateToFileSystem {
         FsConstants.LOCAL_FS_URI.getScheme(), false);
   }
   
+  protected RawLocalFs(URI theUri, FileSystem theFsImpl,
+		       Configuration conf, String supportedScheme, boolean authorityRequired)
+      throws IOException, URISyntaxException {
+    super(theUri, theFsImpl, conf, supportedScheme, authorityRequired);
+  }
+
   @Override
   public int getUriDefaultPort() {
     return -1; // No default port for file:///

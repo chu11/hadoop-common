@@ -147,7 +147,6 @@ public class MagpieNetworkFileSystem extends RawLocalFileSystem {
     Path ftmp = pathWithBase(f);
     return super.mkdirs(ftmp, permission); 
   }
-  
 
   @Override
   protected boolean primitiveMkdir(Path f, FsPermission absolutePermission)
@@ -166,6 +165,16 @@ public class MagpieNetworkFileSystem extends RawLocalFileSystem {
     }
   }
   
+  @Override
+  public long getDefaultBlockSize() {
+    return getConf().getLong("fs.magpienetworkfs.block.size", 32 * 1024 * 1024);
+  }
+
+  @Override
+  public long getDefaultBlockSize(Path f) {
+    return getDefaultBlockSize();
+  }
+
   @Override
   public FsStatus getStatus(Path p) throws IOException {
     Path ptmp = pathWithBase(p);
